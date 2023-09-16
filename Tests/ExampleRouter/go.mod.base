@@ -1,0 +1,6 @@
+module main
+
+go 1.21
+
+replace local/ExampleRouter => ./src
+replace local/BerdyshFrameworkGoLang => ../..
