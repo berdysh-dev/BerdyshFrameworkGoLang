@@ -4,77 +4,150 @@ import (
     "net/http"
 )
 
+type ExHandlerRPC interface {
+    ServeHTTP(http.ResponseWriter, *http.Request)
+    OperationId() (string)
+}
+
 type TypeRouterItem struct {
-    path        string ;
-    handler     http.Handler ;
-    methods     map[string]bool ;
+    MethodsMap  map[string]bool ;
+
+    OperationId string  ;
+    Path        string  ;
+    Name        string  ;
+    Handler     any     ;
+    Cb          any     ;
+    XXX         any     ;
+
+    Args        []interface{} ;
+
+    HandlerORG  http.Handler  ;
+    HandlerRPC  ExHandlerRPC  ;
 }
 
 func (this *TypeRouterItem) Init() (*TypeRouterItem){
-    this.methods = make(map[string]bool) ;
+    this.MethodsMap = make(map[string]bool) ;
     return this ;
 }
 
 type TypeRouter struct {
-    items []*TypeRouterItem ;
-    strictSlash bool ;
+    Items []*TypeRouterItem ;
+    StrictSlashFlag     bool ;
+
+    IsMatchItemByhttpRequest    TypeFuncIsMatchItemByhttpRequest ;
 }
 
-func (this *TypeRouter) Init() (*TypeRouter){
-    this.items = make([]*TypeRouterItem,0) ;
-    return this ;
+type TypeRouterRequest struct {
+    Croak   map[string]interface{}
 }
 
-func (item *TypeRouterItem) isMatch(r *http.Request) (bool){
+type TypeFuncIsMatchItemByhttpRequest func (router *TypeRouter,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool) ;
 
-    var isOkMethod = false ;
-
-    if(len(item.methods) == 0){
+func DefaultIsMatchItemByhttpRequest(router *TypeRouter,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool){
+    var isOkMethod = false ; _ = isOkMethod ;
+    if(len(item.MethodsMap) == 0){
         isOkMethod = true ;
     }else{
-        method,ok := item.methods[r.Method] ;
+        method,ok := item.MethodsMap[r.Method] ;
         if(ok){
             isOkMethod = method ;
         }
     }
-
-    Debugf("[%s][%v][%s][%s]",r.Method,isOkMethod,r.RequestURI,item.path) ;
-
     return false ;
 }
 
-func (this *TypeRouter) ServeHTTP(w http.ResponseWriter,r *http.Request){
-
-
-    for _,item := range this.items{
-        if(item.isMatch(r) == true){
-            item.handler.ServeHTTP(w,r)
-            break ;
-        }
-    }
-}
-
-func (this *TypeRouter) StrictSlash(b bool) (*TypeRouter){
-    this.strictSlash = b ;
+func (this *TypeRouter) Init() (*TypeRouter){
+    this.Items = make([]*TypeRouterItem,0) ;
+    this.IsMatchItemByhttpRequest = DefaultIsMatchItemByhttpRequest ;
     return this ;
 }
 
-func (this *TypeRouter) Handle(path string,handler http.Handler) (*TypeRouterItem){
+func (router *TypeRouter) ServeHTTP(w http.ResponseWriter,r *http.Request){
+    Q := TypeRouterRequest{} ;
+    Q.Croak = make(map[string]interface{}) ;
 
+    for _,item := range router.Items{
+        if(item.HandlerRPC != nil){
+            item.HandlerRPC.ServeHTTP(w,r)
+        }else{
+            item.HandlerORG.ServeHTTP(w,r)
+        }
+        break ;
+    }
+}
+
+func (this *TypeRouter) SetFuncIsMatchItemByhttpRequest(cb TypeFuncIsMatchItemByhttpRequest) (*TypeRouter){
+    this.IsMatchItemByhttpRequest = cb ;
+    return this ;
+}
+
+func (this *TypeRouter) StrictSlash(b bool) (*TypeRouter){
+    this.StrictSlashFlag = b ;
+    return this ;
+}
+
+func (this *TypeRouter) LoaderConfig(args ... any) (*TypeRouter){
+    return this ;
+}
+
+func (router *TypeRouter) LoaderRPC(handlerRPCs ... ExHandlerRPC) (*TypeRouter){
+    for _,h := range handlerRPCs{
+        routerItem := TypeRouterItem{}
+        routerItem.Init();
+        routerItem.HandlerRPC   = h ;
+        routerItem.OperationId  = h.OperationId()
+        router.Items = append(router.Items,&routerItem) ;
+    }
+    return router ;
+}
+
+func (this *TypeRouter) LoaderOpenAPI(args ... any) (*TypeRouter){
+    return this ;
+}
+
+func (this *TypeRouter) AddOperationId(operationId string,handlerORG http.Handler) (*TypeRouter){
     routerItem := TypeRouterItem{}
     routerItem.Init();
-    routerItem.path = path ;
-    routerItem.handler = handler ;
-    this.items = append(this.items,&routerItem) ;
-    return &routerItem ;
+    routerItem.OperationId = operationId ;
+    routerItem.HandlerORG = handlerORG ;
+    return this ;
 }
 
 func (routerItem *TypeRouterItem) Methods(args ... any) (*TypeRouterItem){
     for _,method := range args{
-        routerItem.methods[method.(string)] = true ;
+        routerItem.MethodsMap[method.(string)] = true ;
     }
     return routerItem ;
 }
+
+func (this *TypeRouter) Handle(args ... interface{}) (*TypeRouterItem){
+    routerItem := TypeRouterItem{}
+    routerItem.Init();
+    routerItem.Args = args ;
+    this.Items = append(this.Items,&routerItem) ;
+    return &routerItem ;
+}
+
+func (this *TypeRouter) HandleFunc(args ... interface{}) (*TypeRouterItem){
+    routerItem := TypeRouterItem{}
+    routerItem.Init();
+    routerItem.Args = args ;
+    this.Items = append(this.Items,&routerItem) ;
+    return &routerItem ;
+}
+
+func (this *TypeRouter) FuncGet(args ... interface{}) (*TypeRouter){
+    return this ;
+}
+
+func (this *TypeRouter) FuncPost(args ... interface{}) (*TypeRouter){
+    return this ;
+}
+
+func (this *TypeRouter) OperationId(args ... interface{}) (*TypeRouter){
+    return this ;
+}
+
 
 func NewRouter() (*TypeRouter){
     ret := TypeRouter{}
