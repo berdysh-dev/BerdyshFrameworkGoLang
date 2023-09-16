@@ -1,6 +1,7 @@
 package BerdyshFrameworkGoLang
 
 import (
+    "log/syslog"
     "net/http"
 )
 
@@ -144,19 +145,33 @@ func (this *TypeRouter) FuncPost(args ... interface{}) (*TypeRouter){
     return this ;
 }
 
-func (this *TypeRouter) OperationId(args ... interface{}) (*TypeRouter){
+func (this *TypeRouter) AddHandlerByOperationId(args ... interface{}) (*TypeRouter){
     return this ;
 }
 
 
 func NewRouter() (*TypeRouter){
     ret := TypeRouter{}
-    ret.Init() ;
-    return &ret ;
+    return ret.Init() ;
 }
 
+type TypeToolBox struct {}
 
+func (this *TypeToolBox) Init() (*TypeToolBox){
+    return this ;
+}
 
+func NewToolBox() (*TypeToolBox){
+    ret := TypeToolBox{}
+    return ret.Init() ;
+}
+
+type TypeSyslogConfig struct {
+    Facility    syslog.Priority
+}
+
+func Syslog(conf *TypeSyslogConfig){
+}
 
 
 
