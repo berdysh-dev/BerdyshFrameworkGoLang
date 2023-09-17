@@ -73,7 +73,7 @@ func Debugf(args ... interface{}){
     if(true){
         conn, err := net.Dial("unix","/dev/log") ;
         if(err != nil){
-            fmt.Printf("err[%s]\n",err) ;
+            // fmt.Printf("err[%s]\n",err) ;
         }else{
             facility    := syslog.LOG_LOCAL7 ;
             syslog_lv   := syslog.LOG_DEBUG ;

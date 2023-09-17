@@ -3,6 +3,8 @@ package BerdyshFrameworkGoLang
 import (
     "log/syslog"
     "net/http"
+    "strings"
+    "encoding/json"
 )
 
 type ExHandlerRPC interface {
@@ -102,10 +104,6 @@ func (router *TypeRouter) LoaderRPC(handlerRPCs ... ExHandlerRPC) (*TypeRouter){
     return router ;
 }
 
-func (this *TypeRouter) LoaderOpenAPI(args ... any) (*TypeRouter){
-    return this ;
-}
-
 func (this *TypeRouter) AddOperationId(operationId string,handlerORG http.Handler) (*TypeRouter){
     routerItem := TypeRouterItem{}
     routerItem.Init();
@@ -167,15 +165,183 @@ func NewToolBox() (*TypeToolBox){
 }
 
 type TypeSyslogConfig struct {
+    SockAddr    string
     Facility    syslog.Priority
 }
 
 func Syslog(conf *TypeSyslogConfig){
 }
 
+type TypeConfigOpenAPI struct {
+    PathJson    string ;
+    PathYaml    string ;
+}
 
+type TypeInfoOpenAPI struct {
+    Title               string ;
+    Version             string ;
+    TermsOfService      string ;
+    Description         string ;
+}
 
+func OpenAPI_Decode_info(m map[string]interface{}) (TypeInfoOpenAPI){
+    ret := TypeInfoOpenAPI{} ;
 
+    for K,v := range m{
+        k := strings.ToLower(K) ;
+        switch(k){
+            case "title":{
+                ret.Title = v.(string) ;
+            }
+            case "termsofservice":{
+                ret.TermsOfService = v.(string) ;
+            }
+            case "contact":{}
+            case "license":{}
+            case "description":{
+                ret.Description = v.(string) ;
+            }
+            case "version":{
+                ret.Version = v.(string) ;
+            }
+        }
+    }
+
+    return ret ;
+}
+
+type TypeDefinitionsOpenAPI struct {
+}
+
+func OpenAPI_Decode_definitions(m map[string]interface{}) (TypeDefinitionsOpenAPI){
+
+    ret := TypeDefinitionsOpenAPI{} ;
+
+    for name,xx := range m{
+        vmap := xx.(map[string]interface{}) ;
+        t := "" ;
+        var properties any ;
+        for k,v := range vmap{
+            switch(k){
+                case "type":{
+                    t = v.(string) ;
+                }
+                case "properties":{
+                    properties = v ;
+                }
+            }
+        }
+        for x,v := range properties.(map[string]interface{}){
+            vmap := v.(map[string]interface{}) ;
+            for k,v := range vmap{
+                switch(k){
+                    case "xml":{}
+                    case "type":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "format":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "description":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "enum":{
+                        for _,e := range v.([]any){
+                            Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,e.(string)) ;
+                        }
+                    }
+                    case "example":{
+                        Debugf_("!!!!!!!!!![%s][%V]",k,v) ;
+                    }
+                    case "items":{
+                        Debugf_("!!!!!!!!!![%s][%V]",k,v) ;
+                    }
+                    case "$ref":{
+                        Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v.(string)) ;
+                    }
+                    default:{
+                        Debugf_("!!!!!!!!!![%s][%V]",k,v) ;
+                    }
+                }
+            }
+        }
+    }
+
+    return ret ;
+}
+
+type TypePathsOpenAPI struct {
+    OperationId     string ;
+    Path            string ;
+    Method          string ;
+}
+
+func OpenAPI_Decode_paths(m map[string]interface{}) ([]TypePathsOpenAPI){
+    ret := make([]TypePathsOpenAPI,0)
+    for path,pathDef := range m{
+        for method,methodDef := range pathDef.(map[string]interface{}){
+            operationId := "" ;
+            for k,v := range methodDef.(map[string]interface{}){
+                switch(strings.ToLower(k)){
+                    case "operationid":{
+                        operationId = v.(string) ;
+                    }
+                }
+            }
+            x := TypePathsOpenAPI{} ;
+
+            x.OperationId = operationId ;
+            x.Method = strings.ToUpper(method) ;
+            x.Path = path ;
+            ret = append(ret,x) ;
+        }
+    }
+    return ret ;
+}
+
+type TypeRcLoaderOpenAPI struct {
+    defs map[string]interface{} ;
+}
+
+func (this *TypeRcLoaderOpenAPI) Paths() ([]TypePathsOpenAPI){
+    return this.defs["paths"].([]TypePathsOpenAPI) ;
+}
+
+func LoaderOpenAPI(conf *TypeConfigOpenAPI) (TypeRcLoaderOpenAPI,error){
+
+    ret := TypeRcLoaderOpenAPI{} ;
+
+    defs := make(map[string]interface{}) ;
+
+    if(conf.PathJson != ""){
+        if text , err := File_get_contents(conf.PathJson) ; (err != nil){
+            Debugf("err[%s]",err);
+        }else{
+            m := make(map[string]interface{}) ;
+            json.Unmarshal([]byte(text),&m) ;
+            for K,v := range m{
+                k := strings.ToLower(K) ;
+                switch(k){
+                    case "paths"                :{ defs[k] = OpenAPI_Decode_paths(v.(map[string]interface{})) ; }
+                    case "definitions"          :{ defs[k] = OpenAPI_Decode_definitions(v.(map[string]interface{})) ; }
+                    case "info"                 :{ defs[k] = OpenAPI_Decode_info(v.(map[string]interface{})) ; }
+                    case "tags"                 :{}
+                    case "schemes"              :{}
+                    case "securitydefinitions"  :{}
+                    case "externaldocs"         :{}
+                    case "swagger"              :{ defs[k] = v.(string) ; }
+                    case "host"                 :{}
+                    case "basepath"             :{}
+                }
+            }
+        }
+    }
+
+    ret.defs = defs ;
+
+    return ret,nil ;
+}
+
+func (this *TypeRouter) LoaderOpenAPI (conf *TypeConfigOpenAPI) (*TypeRouter){
+    defs,err := LoaderOpenAPI(conf) ;
+    _ = defs ;
+    _ = err ;
+    return this ;
+}
 
 
 
