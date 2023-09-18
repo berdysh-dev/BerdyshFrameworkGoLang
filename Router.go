@@ -236,12 +236,12 @@ func OpenAPI_Decode_definitions(m map[string]interface{}) (TypeDefinitionsOpenAP
             for k,v := range vmap{
                 switch(k){
                     case "xml":{}
-                    case "type":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
-                    case "format":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
-                    case "description":{ Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "type":{ Debugf("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "format":{ Debugf("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
+                    case "description":{ Debugf("[%s][%s][%s][%s][%s]",name,t,x,k,v) ; }
                     case "enum":{
                         for _,e := range v.([]any){
-                            Debugf_("[%s][%s][%s][%s][%s]",name,t,x,k,e.(string)) ;
+                            Debugf("[%s][%s][%s][%s][%s]",name,t,x,k,e.(string)) ;
                         }
                     }
                     case "example":{
@@ -264,29 +264,121 @@ func OpenAPI_Decode_definitions(m map[string]interface{}) (TypeDefinitionsOpenAP
     return ret ;
 }
 
+type TypeParameterOpenAPI struct {
+    Name        string ;
+    Required    bool ;
+    In          string ;
+    Type        string ;
+    Format      string ;
+    Description string ;
+}
+
 type TypePathsOpenAPI struct {
+    Tag             string ;
     OperationId     string ;
     Path            string ;
     Method          string ;
+    Parameters      map[string]TypeParameterOpenAPI ;
 }
+
 
 func OpenAPI_Decode_paths(m map[string]interface{}) ([]TypePathsOpenAPI){
     ret := make([]TypePathsOpenAPI,0)
+
+
     for path,pathDef := range m{
         for method,methodDef := range pathDef.(map[string]interface{}){
             operationId := "" ;
+            var tags any = nil ;
+            parameters := make(map[string]TypeParameterOpenAPI) ;
             for k,v := range methodDef.(map[string]interface{}){
                 switch(strings.ToLower(k)){
-                    case "operationid":{
-                        operationId = v.(string) ;
+                    case "operationid":{ operationId = v.(string) ; }
+                    case "tags":{ tags = v ; }
+                    case "parameters":{
+                        for _,vv := range v.([]interface{}){
+                            parameter := TypeParameterOpenAPI{} ;
+                            name := "" ;
+                            Debugf_("-------------------------------------------------") ;
+                            for kkk,vvv := range vv.(map[string]interface{}){
+                                switch(kkk){
+                                    case "name":{
+                                        name = vvv.(string) ;
+                                        parameter.Name = name ;
+                                    }
+                                    case "in":{ parameter.In = vvv.(string) ; }
+                                    case "description":{ parameter.Description = vvv.(string) ; }
+                                    case "required":{ parameter.Required = vvv.(bool) ; }
+                                    case "schema":{
+                                        for kkkk,vvvv := range vvv.(map[string]interface{}){
+                                            switch(kkkk){
+                                                case "type":{ parameter.Type = vvvv.(string) ; }
+                                                case "format":{ parameter.Format = vvvv.(string) ; }
+                                                case "items":{ Debugf_("[%s][%V]",kkkk,vvvv) ; }
+                                                case "enum":{ Debugf_("[%s][%V]",kkkk,vvvv) ; }
+                                                case "default":{ Debugf_("[%s][%V]",kkkk,vvvv) ; }
+                                                default:{ Debugf_("[%s][%V]",kkkk,vvvv) ; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if(name != ""){
+                                parameters[name] = parameter ;
+                            }
+                        }
+                    }
+                    case "requestbody":{
+                        for kk,vv := range v.(map[string]interface{}){
+                            switch(kk){
+                                case "content":{
+                                    for kkk,vvv := range vv.(map[string]interface{}){
+                                        switch(kkk){
+                                            case "application/json":{
+                                                for k3,v3 := range vvv.(map[string]interface{}){
+                                                    switch(k3){
+                                                        case "schema":{
+                                                            for k4,v4 := range v3.(map[string]interface{}){
+                                                                switch(k4){
+                                                                    case "$ref":{
+                                                                        Debugf_("!!![%s][%s]",k4,v4.(string)) ;
+                                                                    }
+                                                                    case "type":{
+                                                                        Debugf_("!!![%s][%s]",k4,v4.(string)) ;
+                                                                    }
+                                                                    case "items":{
+                                                                        for k5,v5 := range v4.(map[string]interface{}){
+                                                                            Debugf_("!!![%s][%V]",k5,v5) ;
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    default:{
+                        Debugf_("!!![%s]",k) ;
                     }
                 }
             }
             x := TypePathsOpenAPI{} ;
+            x.OperationId   = operationId ;
+            x.Method        = strings.ToUpper(method) ;
+            x.Path          = path ;
+            x.Parameters    = parameters ;
 
-            x.OperationId = operationId ;
-            x.Method = strings.ToUpper(method) ;
-            x.Path = path ;
+            if(tags != nil){
+                t := tags.([]interface{}) ;
+                x.Tag = t[0].(string) ;
+            }
+
             ret = append(ret,x) ;
         }
     }
@@ -301,7 +393,7 @@ func (this *TypeRcLoaderOpenAPI) Paths() ([]TypePathsOpenAPI){
     return this.defs["paths"].([]TypePathsOpenAPI) ;
 }
 
-func LoaderOpenAPI(conf *TypeConfigOpenAPI) (TypeRcLoaderOpenAPI,error){
+func LoaderOpenAPI(conf *TypeConfigOpenAPI) (*TypeRcLoaderOpenAPI,error){
 
     ret := TypeRcLoaderOpenAPI{} ;
 
@@ -333,7 +425,7 @@ func LoaderOpenAPI(conf *TypeConfigOpenAPI) (TypeRcLoaderOpenAPI,error){
 
     ret.defs = defs ;
 
-    return ret,nil ;
+    return &ret,nil ;
 }
 
 func (this *TypeRouter) LoaderOpenAPI (conf *TypeConfigOpenAPI) (*TypeRouter){
@@ -342,6 +434,62 @@ func (this *TypeRouter) LoaderOpenAPI (conf *TypeConfigOpenAPI) (*TypeRouter){
     _ = err ;
     return this ;
 }
+
+type TypeReqRc struct {
+    w               *http.ResponseWriter ;
+    r               *http.Request ;
+    OperationId     string ;
+    ToolBox         *TypeToolBox ;
+    OpenApi         *TypeRcLoaderOpenAPI ;
+}
+
+func Req(w *http.ResponseWriter, r *http.Request,OperationId string,toolBox *TypeToolBox,openApi *TypeRcLoaderOpenAPI) (*TypeReqRc){
+    ret := TypeReqRc{}
+
+    ret.w = w ;
+    ret.r = r ;
+    ret.OperationId = OperationId ;
+    ret.ToolBox = toolBox ;
+    ret.OpenApi = openApi ;
+
+    return &ret ;
+}
+
+func (this *TypeReqRc) Dump(){
+    Debugf("Dump[%s][%s]----------------------",this.r.Method,this.OperationId) ;
+
+    var paths TypePathsOpenAPI ; _ = paths ;
+
+    flagPaths := false ;
+
+    for _,v := range this.OpenApi.defs["paths"].([]TypePathsOpenAPI){
+        if((v.OperationId != "") && (v.OperationId == this.OperationId)){
+            paths = v ;
+            flagPaths = true ;
+        }
+    }
+
+    if(flagPaths){
+        for _,param := range paths.Parameters{
+            Debugf("%V",param) ;
+        }
+    }
+
+    if(this.r.ContentLength > 0){
+        Debugf("ContentLength[%d]",this.r.ContentLength) ;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 
