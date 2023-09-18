@@ -1,6 +1,7 @@
 package BerdyshFrameworkGoLang
 
 import (
+    "fmt"
     "strings"
     "reflect"
     "bytes"
@@ -19,6 +20,14 @@ func (this *TypeAssoc) Init() (*TypeAssoc){
 
 func LC(src string) (string){ return strings.ToLower(src[0:1]) + src[1:] ; }
 func UC(src string) (string){ return strings.ToUpper(src[0:1]) + src[1:] ; }
+
+func (this *TypeAssoc) GetType(t interface{}) string {
+    return fmt.Sprintf("%s",reflect.TypeOf(t)) ;
+}
+
+func (this *TypeAssoc) GetType2(t interface{}) (string,reflect.Kind) {
+    return fmt.Sprintf("%T",t),reflect.TypeOf(t).Kind() ;
+}
 
 func (this *TypeAssoc) conv_r (mode int,src interface{}) (interface{},error){
 
@@ -191,6 +200,67 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
 
     return nil ;
 }
+
+type TypeAssocIterator struct {
+    skey    []string ;
+    idx     int ;
+    max     int ;
+    opt     Opt
+    assoc *TypeAssoc ;
+}
+
+func (this *TypeAssocIterator) HasNext() bool{
+    return (this.idx < this.max) ;
+}
+
+func (this *TypeAssocIterator) Next() (any, error){
+    this.idx += 1 ;
+    return nil,nil ;
+}
+
+func (this *TypeAssocIterator) ReDo() (*TypeAssocIterator){
+
+
+    if(this.opt.Keys){
+        Debugf("キー");
+    }else{
+        Debugf("キーじゃない");
+    }
+
+    return this ;
+}
+
+func (this *TypeAssoc) IteratorKeys(opts ... interface{}) (*TypeAssocIterator){
+    ret := this.Iterator() ;
+    ret.opt.Keys = true ;
+    return ret.ReDo() ;
+}
+
+func (this *TypeAssoc) Iterator(opts ... interface{}) (*TypeAssocIterator){
+
+    ret := TypeAssocIterator{} ;
+    ret.assoc = this ;
+    ret.idx = 0 ;
+    ret.max = 3 ;
+    ret.skey = make([]string,0) ;
+
+    for _,opt := range opts{
+        t := GetType(opt) ;
+        switch(t){
+            case "BerdyshFrameworkGoLang.Opt":{
+                if(opt.(Opt).Keys       ){ ret.opt.Keys         = true ; }
+                if(opt.(Opt).SortByKey  ){ ret.opt.SortByKey    = true ; }
+                if(opt.(Opt).SortByValue){ ret.opt.SortByValue  = true ; }
+                if(opt.(Opt).OrderByDesc){ ret.opt.OrderByDesc  = true ; }
+                if(opt.(Opt).OrderByAsc ){ ret.opt.OrderByAsc   = true ; }
+            }
+        }
+    }
+
+    ret.ReDo() ;
+    return &ret ;
+}
+
 
 func (this *TypeAssoc) String() (string){
     var buf bytes.Buffer ; _ = buf ;

@@ -96,6 +96,16 @@ func    Entry() {
 
     X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
 
+    assoc := X.NewAssoc() ;
+    i := assoc.IteratorKeys() ;
+
+    for i.HasNext(){
+        v,err := i.Next() ; _ = v ;
+        if(err != nil){
+            break ;
+        }
+    }
+
     toolBox := X.NewToolBox() ;
 
     router := mux.NewRouter() ;
