@@ -19,11 +19,11 @@ _    "io/fs"
     "github.com/google/uuid"
 )
 
-func Gettype(t interface{}) string {
+func GetType(t interface{}) string {
     return fmt.Sprintf("%s",reflect.TypeOf(t)) ;
 }
 
-func Gettype2(t interface{}) (string,string) {
+func GetType2(t interface{}) (string,string) {
     return fmt.Sprintf("%s",reflect.TypeOf(t)), fmt.Sprintf("%T",t) ;
 }
 
@@ -44,7 +44,7 @@ func Debugf(args ... interface{}){
     var f[99] string ;
 
     for iii := 0; iii < len(args); iii++ {
-        switch(Gettype(args[iii])){
+        switch(GetType(args[iii])){
         case "string":
             f[iii] = fmt.Sprintf("%s",args[iii]) ;
             break ;
@@ -131,7 +131,7 @@ func UUIDv4() string {
 
 func Strval(org interface{}) string{
 
-    t := Gettype(org) ;
+    t := GetType(org) ;
 
     if(t == "[]uint8"){
         return string(org.([]uint8)) ;

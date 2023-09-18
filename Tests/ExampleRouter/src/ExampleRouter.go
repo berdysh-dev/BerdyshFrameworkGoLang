@@ -29,7 +29,11 @@ type HandlerStore struct {
     OpenApi         *X.TypeRcLoaderOpenAPI ;
 }
 
-func (this *HandlerPet)     ServeHTTP(w http.ResponseWriter, r *http.Request) { X.Debugf("Pet[%s]"      ,this.OperationId) ; }
+func (this *HandlerPet)     ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    X.Debugf("Pet[%s]"      ,this.OperationId) ;
+    req := X.Req(&w,r,this.OperationId,this.ToolBox,this.OpenApi) ;
+    req.Dump() ;
+}
 
 func (this *HandlerUser)    ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
@@ -44,7 +48,8 @@ func (this *HandlerUser)    ServeHTTP(w http.ResponseWriter, r *http.Request) {
         case "createUsersWithListInput" :{ this.createUsersWithListInput    (req) ; }
         case "createUser"               :{ this.createUser                  (req) ; }
         default:{
-            X.Debugf("User-Miss[%p][%s]" ,this,this.OperationId) ;
+            // X.Debugf("User-Miss[%p][%s]" ,this,this.OperationId) ;
+            this.loginUser(req) ;
         }
     }
 }
@@ -81,7 +86,11 @@ func (this *HandlerUser) createUser(req *X.TypeReqRc){
 
 ///////////////////////////
 
-func (this *HandlerStore)   ServeHTTP(w http.ResponseWriter, r *http.Request) { X.Debugf("Store[%s]"    ,this.OperationId) ; }
+func (this *HandlerStore)   ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    X.Debugf("Store[%s]"    ,this.OperationId) ;
+    req := X.Req(&w,r,this.OperationId,this.ToolBox,this.OpenApi) ;
+    req.Dump() ;
+}
 
 func    Entry() {
 
@@ -105,17 +114,16 @@ func    Entry() {
         for _,paths := range openAPI.Paths(){
             switch(paths.Tag){
                 case "pet":{
-                    router.Handle(paths.Path,&HandlerPet{ ToolBox: toolBox,OperationId: paths.OperationId}).Methods(paths.Method) ;
+                    handler := &HandlerUser{ OpenApi: openAPI,ToolBox: toolBox,OperationId: paths.OperationId} ;
+                    router.Handle(paths.Path,handler).Methods(paths.Method) ;
                 }
                 case "user":{
-                    // X.Debugf("[%04d][%s][%s][%s][%s]",idx,paths.Tag,paths.Method,paths.Path,paths.OperationId) ;
-                    // handler := new(HandlerUser)
-                    // handler := &HandlerUser{}
                     handler := &HandlerUser{ OpenApi: openAPI,ToolBox: toolBox,OperationId: paths.OperationId} ;
                     router.Handle(paths.Path,handler).Methods(paths.Method) ;
                 }
                 case "store":{
-                    // router.Handle(paths.Path,&HandlerStore{ ToolBox: toolBox,OperationId: paths.OperationId}).Methods(paths.Method) ;
+                    handler := &HandlerUser{ OpenApi: openAPI,ToolBox: toolBox,OperationId: paths.OperationId} ;
+                    router.Handle(paths.Path,handler).Methods(paths.Method) ;
                 }
             }
         }
