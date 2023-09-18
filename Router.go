@@ -476,7 +476,16 @@ func (this *TypeReqRc) Dump(){
     }
 
     if(this.r.ContentLength > 0){
+        contentTypePostFull := this.r.Header.Get("content-type") ;
         Debugf("ContentLength[%d]",this.r.ContentLength) ;
+        Debugf("contentTypePostFull[%s]",contentTypePostFull) ;
+        post_bytes := make([]byte,this.r.ContentLength) ;
+        this.r.Body.Read(post_bytes) ;
+        assoc := NewAssoc() ;
+        assoc.LoadContents(contentTypePostFull,post_bytes) ;
+
+        Debugf("%s",assoc.String()) ;
+
     }
 }
 
