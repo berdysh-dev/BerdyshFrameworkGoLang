@@ -2,7 +2,6 @@ package BerdyshFrameworkGoLang
 
 import (
     "fmt"
-    "strings"
     "reflect"
     "bytes"
     "encoding/json"
@@ -12,17 +11,23 @@ type TypeAssocRaw map[string]interface{}
 
 type TypeAssoc struct {
     Raw interface{}
+    xtype string ;
+
+    inited  bool ;
+    isMap   bool ;
+    isArray bool ;
 }
 
 func (this *TypeAssoc) Init() (*TypeAssoc){
     return this ;
 }
 
-func LC(src string) (string){ return strings.ToLower(src[0:1]) + src[1:] ; }
-func UC(src string) (string){ return strings.ToUpper(src[0:1]) + src[1:] ; }
-
-func (this *TypeAssoc) GetType(t interface{}) string {
-    return fmt.Sprintf("%s",reflect.TypeOf(t)) ;
+func (this *TypeAssoc) GetType(opts ... interface{}) string {
+    if(len(opts) == 1){
+        return GetType(opts[0]) ;
+    }else{
+        return GetType(this.Raw) ;
+    }
 }
 
 func (this *TypeAssoc) GetType2(t interface{}) (string,reflect.Kind) {
@@ -129,7 +134,6 @@ func (this *TypeAssoc) DecodeJson(src any) (error){
 
     switch(reflect.TypeOf(src).Kind()){
         case reflect.String:{
-            Debugf("string") ;
             text = src.(string) ;
         }
         default:{
@@ -159,7 +163,19 @@ func (this *TypeAssoc) DecodeJson(src any) (error){
     }
 }
 
+func IsStandardMap(v any) bool{
+    if(GetType(v) == "map[string]interface {}"){
+        return true ;
+    }else{
+        return false ;
+    }
+}
+
 func (this *TypeAssoc) LoadFile(path string) (error){
+    text,_ := File_get_contents(path);
+
+    this.DecodeJson(text);
+
     return nil ;
 }
 
@@ -202,57 +218,158 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
 }
 
 type TypeAssocIterator struct {
-    skey    []string ;
-    idx     int ;
-    max     int ;
-    opt     Opt
-    assoc *TypeAssoc ;
+    Skey    []string ;
+    Idx     int ;
+    Max     int ;
+    Opts    Opt
+    Assoc *TypeAssoc ;
 }
 
 func (this *TypeAssocIterator) HasNext() bool{
-    return (this.idx < this.max) ;
+    return (this.Idx < this.Max) ;
+}
+
+func (this *TypeAssocIterator) Rewind() {
+    this.Max = len(this.Skey) ;
+    this.Idx = 0 ;
 }
 
 func (this *TypeAssocIterator) Next() (any, error){
-    this.idx += 1 ;
-    return nil,nil ;
+    ret := this.Skey[this.Idx] ;
+    this.Idx += 1 ;
+    return ret,nil ;
 }
 
 func (this *TypeAssocIterator) ReDo() (*TypeAssocIterator){
+    this.Idx = 0 ;
+    this.Max = 0 ;
 
-
-    if(this.opt.Keys){
-        Debugf("キー");
-    }else{
-        Debugf("キーじゃない");
+    if(this.Opts.Keys){
+        if((this.Assoc != nil) && IsStandardMap(this.Assoc.Raw)){
+            skey := make([]string,0) ;
+            for key,_ := range this.Assoc.Raw.(map[string] interface{}){
+                skey = append(skey,key) ;
+            }
+            this.Skey = skey ;
+            this.Max = len(this.Skey) ;
+        }
     }
 
     return this ;
 }
 
+func (this *TypeAssoc) GetAssoc(opts ... interface{}) (*TypeAssoc){
+    k := opts[0].(string) ;
+    m := this.Raw.(map[string]interface{}) ;
+    return NewAssoc().Clone(m[k]) ;
+}
+
+func (this *TypeAssoc) Get(opts ... interface{}) (any){
+    RetIsAssoc := false ;
+    if(len(opts) >= 2){
+        RetIsAssoc = true ;
+    }
+    if(len(opts) >= 1){
+        opt := opts[0] ;
+        if(true){
+            k := opt.(string) ;
+            m := this.Raw.(map[string]interface{}) ;
+
+            if(RetIsAssoc){
+                return NewAssoc().Clone(m[k]) ;
+            }else{
+                return m[k] ;
+            }
+        }
+    }
+    return nil ;
+}
+
+func (this *TypeAssoc) SetKV(opts ... interface{}) (*TypeAssoc){
+    if(len(opts) == 2){
+        if(this.inited == false){
+            this.inited = true ;
+            this.isMap = true ;
+            this.Raw = make(map[string]interface{}) ;
+        }
+
+        if(this.isMap == true){
+            v := opts[1] ;
+            t := GetType(v) ;
+
+            switch(t){
+                case "*BerdyshFrameworkGoLang.TypeAssoc":{
+                    vv := v.(*TypeAssoc).Raw ;
+                    this.Raw.(map[string]interface{})[opts[0].(string)] = vv ;
+                }
+                case "string":{
+                    this.Raw.(map[string]interface{})[opts[0].(string)] = v.(string) ;
+                }
+                case "int":{
+                    this.Raw.(map[string]interface{})[opts[0].(string)] = v.(int) ;
+                }
+                case "bool":{
+                    this.Raw.(map[string]interface{})[opts[0].(string)] = v.(bool) ;
+                }
+                default:{
+                    Debugf("[%s][%V]",t,v);
+                }
+            }
+        }
+    }
+
+    return this ;
+}
+
+func (this *TypeAssoc) Append(opts ... interface{}) (*TypeAssoc){
+
+    if(this.inited == false){
+        this.inited = true ;
+        this.isArray = true ;
+        this.Raw = make([] interface{},0) ;
+    }
+
+    if(this.isArray == true){
+        for _,v := range opts{
+            t := GetType(v) ;
+            Debugf_("[%s]",t);
+            switch(t){
+                case "*BerdyshFrameworkGoLang.TypeAssoc":{
+                    vv := v.(*TypeAssoc).Raw ;
+                    this.Raw = append(this.Raw.([] interface{}),vv) ;
+                }
+                default:{
+                    this.Raw = append(this.Raw.([] interface{}),v) ;
+                }
+            }
+        }
+    }
+    return this ;
+}
+
 func (this *TypeAssoc) IteratorKeys(opts ... interface{}) (*TypeAssocIterator){
     ret := this.Iterator() ;
-    ret.opt.Keys = true ;
+    ret.Opts.Keys = true ;
     return ret.ReDo() ;
 }
 
 func (this *TypeAssoc) Iterator(opts ... interface{}) (*TypeAssocIterator){
 
     ret := TypeAssocIterator{} ;
-    ret.assoc = this ;
-    ret.idx = 0 ;
-    ret.max = 3 ;
-    ret.skey = make([]string,0) ;
+    ret.Assoc = this ;
+    ret.Idx = 0 ;
+    ret.Max = 0 ;
+    ret.Skey = make([]string,0) ;
 
     for _,opt := range opts{
         t := GetType(opt) ;
         switch(t){
             case "BerdyshFrameworkGoLang.Opt":{
-                if(opt.(Opt).Keys       ){ ret.opt.Keys         = true ; }
-                if(opt.(Opt).SortByKey  ){ ret.opt.SortByKey    = true ; }
-                if(opt.(Opt).SortByValue){ ret.opt.SortByValue  = true ; }
-                if(opt.(Opt).OrderByDesc){ ret.opt.OrderByDesc  = true ; }
-                if(opt.(Opt).OrderByAsc ){ ret.opt.OrderByAsc   = true ; }
+                if(opt.(Opt).Keys       ){ ret.Opts.Keys         = true ; }
+                if(opt.(Opt).SortByKey  ){ ret.Opts.SortByKey    = true ; }
+                if(opt.(Opt).SortByValue){ ret.Opts.SortByValue  = true ; }
+                if(opt.(Opt).OrderByDesc){ ret.Opts.OrderByDesc  = true ; }
+                if(opt.(Opt).OrderByAsc ){ ret.Opts.OrderByAsc   = true ; }
             }
         }
     }
@@ -276,9 +393,51 @@ func (this *TypeAssoc) String() (string){
     }
 }
 
-func NewAssoc() (TypeAssoc){
+func (this *TypeAssoc) Type() (string){
+    return this.xtype ;
+}
+
+func (this *TypeAssoc) Clone(v any) (*TypeAssoc){
+    this.Raw = v ;
+    this.xtype = GetType(this.Raw) ;
+    return this ;
+}
+
+func (this *TypeAssoc) ToLower() (*TypeAssoc){
+    return this ;
+}
+
+func (this *TypeAssoc) ToUpper() (*TypeAssoc){
+    return this ;
+}
+
+func NewAssoc() (*TypeAssoc){
     ret := TypeAssoc{} ;
     ret.Init() ;
-    return ret ;
+    return &ret ;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -1,21 +1,16 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "log"
     "fmt"
-    "errors"
+_   "errors"
     "os"
     "strings"
-    "strconv"
     "runtime"
     "reflect"
     "time"
     "net"
     "log/syslog"
     "encoding/base64"
-_   "encoding/json"
-_    "io/ioutil"
-_    "io/fs"
     "github.com/google/uuid"
 )
 
@@ -129,43 +124,6 @@ func UUIDv4() string {
     return uu ;
 }
 
-func Strval(org interface{}) string{
-
-    t := GetType(org) ;
-
-    if(t == "[]uint8"){
-        return string(org.([]uint8)) ;
-    }else if(t == "string"){
-        ;
-    }else{
-        fmt.Printf("TYPE[%s]\n",t) ;
-    }
-
-    return org.(string) ;
-}
-
-func Intval(org interface{}) int{
-    return org.(int) ;
-}
-
-func Chr(c interface{}) string {
-    return string(c.(byte)) ;
-}
-
-func Ord(c interface{}) byte {
-    return Strval(c)[0] ;
-}
-
-func Atoi(org interface{}) int{
-    i, _ := strconv.Atoi(Strval(org)) ;
-    return i ;
-}
-
-func Atoi64(org interface{}) uint64{
-    convertedStrUint64, _ := strconv.ParseUint(Strval(org), 10, 64) ;
-    return convertedStrUint64 ;
-}
-
 func File_exists(path interface{}) int{
     _, err := os.Stat(Strval(path)) ;
     if(err == nil){
@@ -173,81 +131,6 @@ func File_exists(path interface{}) int{
     }else{
         return 0 ;
     }
-}
-
-func Trim(src interface{}) string{
-    return strings.Trim(Strval(src)," \t\r\n\f\v") ;
-}
-
-func Ltrim(src interface{}) string{
-    return strings.TrimLeft(Strval(src)," \t\r\n\f\v") ;
-}
-
-func Rtrim(src interface{}) string{
-    return strings.TrimRight(Strval(src)," \t\r\n\f\v") ;
-}
-
-func Substr(args ... interface{}) string{
-    ret := "" ;
-    str := "" ;
-    st := 0 ;
-    offset := 0 ;
-    length := 0 ;
-
-    is_length := 0 ;
-
-    num_args := len(args) ;
-
-    if(num_args < 1){ return "" ; }
-
-    str = Strval(args[0]) ;
-    str_len := len(str) ;
-    bin := []byte(str)
-
-    switch(num_args){
-    case 2:{
-            str = Strval(args[0]) ;
-            offset = Intval(args[1]) ;
-        }
-    case 3:{
-            str = Strval(args[0]) ;
-            offset = Intval(args[1]) ;
-            length = Intval(args[2]) ;
-            is_length = 1 ;
-        }
-    }
-
-    if(offset < 0){
-        offset = 0 - offset ;
-        st = str_len - offset ;
-    }else{
-        st = offset ;
-    }
-
-    idx := st ;
-    cnt := 0 ;
-    for(idx < str_len){
-        ret += Chr(bin[idx]) ;
-        idx += 1 ;
-        cnt += 1 ;
-        if(is_length != 0){
-            if(cnt >= length){ break ; }
-        }
-    }
-
-    _ = str ; _ = offset ; _ = length ; _ = is_length ;
-
-    return ret ;
-}
-
-func local_dummy_KonaPayUtil(){
-
-    err := errors.New("NULL") ;
-
-    _ = err ;
-
-    fmt.Print("") ;
-    log.Print("") ;
 }
 
 func Base64_decode(src string) (string,error){

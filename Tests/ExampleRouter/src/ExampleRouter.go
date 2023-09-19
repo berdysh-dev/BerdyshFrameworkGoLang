@@ -2,7 +2,7 @@ package ExampleRouter
 
 import (
 _   "io"
-_   "fmt"
+    "fmt"
     "log/syslog"
     "net/http"
     "github.com/gorilla/mux"
@@ -93,18 +93,77 @@ func (this *HandlerStore)   ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func    Entry() {
-
+    X.SlogInit() ;
     X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
 
-    assoc := X.NewAssoc() ;
-    i := assoc.IteratorKeys() ;
+    if(false){
+        A := X.NewAssoc().Append("a").Append("b").Append("c") ;
+        B := X.NewAssoc().Append("x").Append("y").Append("z") ;
 
-    for i.HasNext(){
-        v,err := i.Next() ; _ = v ;
-        if(err != nil){
-            break ;
+        J := X.NewAssoc().SetKV("A",A).SetKV("B",B).SetKV("C","C").SetKV("D",123).SetKV("E",true) ;
+
+        X.Debugf("Ans[%s]",J.String()) ;
+    }
+    if(true){
+
+        optA1 := X.NewAssoc().Append(3,1,4) ;
+        optB1 := X.NewAssoc().Append(9).Append(8).Append(7) ;
+        optA2 := X.NewAssoc().Append("A").Append("B","C")
+        optB2 := X.NewAssoc().Append("X","Y","Z")
+
+        A := X.NewAssoc().SetKV("Name","AAA").SetKV("Age",17).SetKV("Opt1",optA1).SetKV("Opt2",optA2) ;
+        B := X.NewAssoc().SetKV("Name","BBB").SetKV("Age",50).SetKV("Opt1",optB1).SetKV("Opt2",optB2) ;
+
+        J := X.NewAssoc().Append(A,B) ;
+
+        fmt.Printf("%s\n",J.ToLower().ToUpper().String()) ;
+    }
+
+    if(false){
+        assoc := X.NewAssoc() ;
+        assoc.LoadFile("/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json") ;
+
+        i := assoc.Iterator(X.Opt{Keys: true}) ;
+
+        for i.HasNext(){
+            key,err := i.Next() ;
+            if(err != nil){
+                X.Debugf("err[%s]",err);
+                break ;
+            }
+
+            X.Debugf("[%s]",key) ;
+            as := assoc.GetAssoc(key) ;
+            X.Debugf("[%V]",as.Type()) ;
         }
     }
+    X.Debugf("Fin") ;
+}
+
+func    Entry2() {
+
+    X.SlogInit() ;
+    X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
+
+    if(false){
+        assoc := X.NewAssoc() ;
+        assoc.LoadFile("/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json") ;
+
+        i := assoc.Iterator(X.Opt{Keys: true}) ;
+
+        for i.HasNext(){
+            key,err := i.Next() ;
+            if(err != nil){
+                X.Debugf("err[%s]",err);
+                break ;
+            }
+
+            X.Debugf("[%s]",key) ;
+            as := assoc.GetAssoc(key) ;
+            X.Debugf("[%V]",as.Type()) ;
+        }
+    }
+    X.Debugf("...") ;
 
     toolBox := X.NewToolBox() ;
 
