@@ -1,10 +1,9 @@
 package BerdyshFrameworkGoLang
 
 import (
+    "fmt"
     "log/syslog"
     "net/http"
-    "strings"
-    "encoding/json"
 )
 
 type ExHandlerRPC interface {
@@ -184,25 +183,121 @@ type TypeInfoOpenAPI struct {
     Description         string ;
 }
 
-func OpenAPI_Decode_info(m map[string]interface{}) (TypeInfoOpenAPI){
+type TypeVersionOpenAPI struct {
+    Version string
+}
+
+type TypeServersEntryOpenAPI struct {
+    Url string ;
+}
+
+type TypeServersOpenAPI struct {
+    defs []TypeServersEntryOpenAPI ;
+}
+
+func OpenAPI_Decode_servers(ch *TypeAssoc) (TypeServersOpenAPI){
+
+    ret := TypeServersOpenAPI{} ;
+
+    defs := make([]TypeServersEntryOpenAPI,0) ;
+
+    Debugf_("Type[%s]",ch.Type()) ;
+    if(ch.IsArray()){
+        i := ch.Iterator() ;
+        for i.HasNext(){
+            Key,_ := i.Next() ;
+            v := ch.GetAssoc(Key) ;
+            if(v.IsStandardMap()){
+                def := TypeServersEntryOpenAPI{} ;
+                ii := v.Iterator() ;
+                for ii.HasNext(){
+                    K2,_ := ii.Next() ;
+                    vv := v.GetAssoc(K2) ;
+
+                    switch(K2){
+                        case "url":{
+                            def.Url = vv.String() ;
+                        }
+                        default:{
+                            Debugf("K2[%s][%s]",K2,vv.String()) ;
+                        }
+                    }
+
+                }
+                defs = append(defs,def) ;
+            }
+        }
+    }
+
+    ret.defs = defs ;
+
+    return ret ;
+}
+
+func OpenAPI_Decode_tags(ch *TypeAssoc) (error){ return nil ; }
+func OpenAPI_Decode_externaldocs(ch *TypeAssoc) (error){ return nil ; }
+
+func OpenAPI_Decode_components(ch *TypeAssoc) (error){
+    // Debugf("Type[%s]",ch.Type()) ;
+    // Debugf("String[%s]",ch.String()) ;
+    return nil ;
+}
+
+func OpenAPI_Decode_openapi(ch *TypeAssoc) (TypeVersionOpenAPI){
+
+    ret := TypeVersionOpenAPI{} ;
+
+    if ok,str := IsString(ch) ; (ok == true){
+        ret.Version = str ;
+    }else{
+        Debugf("String変換不可") ;
+
+        Debugf("Type[%s]",ch.Type()) ;
+        Debugf("String[%s]",ch.String()) ;
+    }
+
+    return ret ;
+}
+
+func OpenAPI_Decode_info(ch *TypeAssoc) (TypeInfoOpenAPI){
     ret := TypeInfoOpenAPI{} ;
 
-    for K,v := range m{
-        k := strings.ToLower(K) ;
-        switch(k){
+    i := ch.Iterator() ;
+    for i.HasNext(){
+        Key,_ := i.Next() ;
+        key := Strtolower(Key) ;
+        v := ch.GetAssoc(Key) ;
+        switch(key){
             case "title":{
-                ret.Title = v.(string) ;
+                ret.Title = v.String() ;
             }
             case "termsofservice":{
-                ret.TermsOfService = v.(string) ;
+                ret.TermsOfService = v.String() ;
             }
-            case "contact":{}
-            case "license":{}
+            case "contact":{
+                ii := v.Iterator() ;
+                for ii.HasNext(){
+                    K2,_ := ii.Next() ;
+                    vv := v.GetAssoc(K2) ;
+                    Debugf_("[%s][%s][%s]",key,K2,vv.String()) ;
+                }
+            }
+            case "license":{
+                ii := v.Iterator() ;
+                for ii.HasNext(){
+                    K2,_ := ii.Next() ;
+                    vv := v.GetAssoc(K2) ;
+                    Debugf_("[%s][%s][%s]",key,K2,vv.String()) ;
+                }
+            }
             case "description":{
-                ret.Description = v.(string) ;
+                ret.Description = v.String() ;
             }
             case "version":{
-                ret.Version = v.(string) ;
+                ret.Version = v.String() ;
+            }
+            default:{
+                Debugf("[%s][%s]",key,v.Type()) ;
             }
         }
     }
@@ -282,9 +377,65 @@ type TypePathsOpenAPI struct {
 }
 
 
-func OpenAPI_Decode_paths(m map[string]interface{}) ([]TypePathsOpenAPI){
+func OpenAPI_Decode_paths(ch *TypeAssoc) ([]TypePathsOpenAPI){
     ret := make([]TypePathsOpenAPI,0)
 
+    if(ch.IsStandardMap()){
+        var kv TypeKV ;
+        for i := ch.Iterator() ; i.HasNext(&kv) ;i.Next(){
+            Path ,v := kv.GetStringAssoc() ;
+            Debugf_("[%s][%T]",Path,v);
+            if(v.IsStandardMap()){
+                for ii := v.Iterator() ; ii.HasNext(&kv) ;ii.Next(){
+                    method ,vv := kv.GetStringAssoc() ;
+                    Debugf_("[%s]",method) ;
+                    if(vv.IsStandardMap()){
+                        for iii := vv.Iterator() ; iii.HasNext(&kv) ;iii.Next(){
+                            k ,def := kv.GetStringAssoc() ;
+                            Debugf_("[%s]",k);
+                            switch(k){
+                                case "tags":{
+                                    if(def.IsArray()){
+                                        for ix := def.Iterator() ; ix.HasNext(&kv) ; ix.Next() {
+                                        }
+                                    }
+                                }
+                                case "summary":{}
+                                case "x-swagger-router-controller":{}
+                                case "description":{}
+                                case "operationId":{}
+                                case "parameters":{
+                                    if(def.IsArray()){
+                                        for ix := def.Iterator() ; ix.HasNext(&kv) ; ix.Next() {
+                                            _,v3 := kv.GetIntAssoc() ;
+                                            if(v3.IsStandardMap()){
+                                                for iz := v3.Iterator() ; iz.HasNext(&kv) ; iz.Next() {
+                                                    kk ,_ := kv.GetStringAssoc() ;
+                                                    Debugf("[%s]",kk);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                case "responses":{}
+                                case "security":{}
+                                case "requestBody":{}
+                                default:{
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    
+
+/*
+
+            Debugf("[%V]",v);
 
     for path,pathDef := range m{
         for method,methodDef := range pathDef.(map[string]interface{}){
@@ -382,48 +533,51 @@ func OpenAPI_Decode_paths(m map[string]interface{}) ([]TypePathsOpenAPI){
             ret = append(ret,x) ;
         }
     }
+*/
     return ret ;
 }
 
 type TypeRcLoaderOpenAPI struct {
-    defs map[string]interface{} ;
+    defs *TypeAssoc ;
 }
 
+/*
 func (this *TypeRcLoaderOpenAPI) Paths() ([]TypePathsOpenAPI){
     return this.defs["paths"].([]TypePathsOpenAPI) ;
 }
+*/
 
 func LoaderOpenAPI(conf *TypeConfigOpenAPI) (*TypeRcLoaderOpenAPI,error){
 
     ret := TypeRcLoaderOpenAPI{} ;
-
-    defs := make(map[string]interface{}) ;
+    ret.defs = NewAssoc() ;
 
     if(conf.PathJson != ""){
-        if text , err := File_get_contents(conf.PathJson) ; (err != nil){
-            Debugf("err[%s]",err);
-        }else{
-            m := make(map[string]interface{}) ;
-            json.Unmarshal([]byte(text),&m) ;
-            for K,v := range m{
-                k := strings.ToLower(K) ;
-                switch(k){
-                    case "paths"                :{ defs[k] = OpenAPI_Decode_paths(v.(map[string]interface{})) ; }
-                    case "definitions"          :{ defs[k] = OpenAPI_Decode_definitions(v.(map[string]interface{})) ; }
-                    case "info"                 :{ defs[k] = OpenAPI_Decode_info(v.(map[string]interface{})) ; }
-                    case "tags"                 :{}
-                    case "schemes"              :{}
-                    case "securitydefinitions"  :{}
-                    case "externaldocs"         :{}
-                    case "swagger"              :{ defs[k] = v.(string) ; }
-                    case "host"                 :{}
-                    case "basepath"             :{}
-                }
+
+        swagger := NewAssoc().LoadFile(conf.PathJson) ;
+
+        i := swagger.Iterator() ;
+        for i.HasNext(){
+            Key,err := i.Next() ;
+            if(err != nil){
+                Debugf("err[%s]",err) ;
+                break ;
+            }
+            key := Strtolower(Key) ;
+            ch := swagger.GetAssoc(Key) ;
+            switch(key){
+                case "servers"      :{ ret.defs.SetKV(key,OpenAPI_Decode_servers        (ch)) ; }
+                case "info"         :{ ret.defs.SetKV(key,OpenAPI_Decode_info           (ch)) ; }
+                case "tags"         :{ ret.defs.SetKV(key,OpenAPI_Decode_tags           (ch)) ; }
+                case "paths"        :{ ret.defs.SetKV(key,OpenAPI_Decode_paths          (ch)) ; }
+                case "externaldocs" :{ ret.defs.SetKV(key,OpenAPI_Decode_externaldocs   (ch)) ; }
+                case "components"   :{ ret.defs.SetKV(key,OpenAPI_Decode_components     (ch)) ; }
+                case "openapi"      :{ ret.defs.SetKV(key,OpenAPI_Decode_openapi        (ch)) ; }
             }
         }
-    }
 
-    ret.defs = defs ;
+        fmt.Printf("%s\n",ret.defs.String()) ;
+    }
 
     return &ret,nil ;
 }
@@ -457,6 +611,7 @@ func Req(w *http.ResponseWriter, r *http.Request,OperationId string,toolBox *Typ
 
 func (this *TypeReqRc) Dump(){
     Debugf("Dump[%s][%s]----------------------",this.r.Method,this.OperationId) ;
+/*
 
     var paths TypePathsOpenAPI ; _ = paths ;
 
@@ -487,6 +642,8 @@ func (this *TypeReqRc) Dump(){
         Debugf("%s",assoc.String()) ;
 
     }
+*/
+
 }
 
 

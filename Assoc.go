@@ -5,6 +5,7 @@ import (
     "reflect"
     "bytes"
     "encoding/json"
+    "github.com/goccy/go-yaml"
 )
 
 type TypeAssocRaw map[string]interface{}
@@ -128,6 +129,33 @@ func (this *TypeAssoc) conv_r (mode int,src interface{}) (interface{},error){
     return src,nil ;
 }
 
+func (this *TypeAssoc) DecodeYaml(src any) (error){
+    var text string ;
+
+    switch(reflect.TypeOf(src).Kind()){
+        case reflect.String:{
+            text = src.(string) ;
+        }
+        default:{
+            text = string(src.([]byte)) ;
+        }
+    }
+
+    var m any ;
+    if err := yaml.Unmarshal([]byte(text), &m) ; (err != nil){
+        Debugf("err[%s]",err) ;
+        return err ;
+    }
+
+    if tmp,err := this.conv_r(0,m) ; (err != nil){
+        Debugf("err[%s]",err) ;
+        return err ;
+    }else{
+        this.Raw = tmp ;
+        return nil ;
+    }
+}
+
 func (this *TypeAssoc) DecodeJson(src any) (error){
 
     var text string ;
@@ -163,6 +191,28 @@ func (this *TypeAssoc) DecodeJson(src any) (error){
     }
 }
 
+func (this *TypeAssoc) IsArray() bool{
+    if((this.isArray == true) || (this.xtype == "[]interface {}")){
+        return true ;
+    }
+    return false ;
+}
+
+func (this *TypeAssoc) IsStandardMap(opts ... interface{}) bool{
+    if(len(opts) == 0){
+        t := GetType(this.Raw) ;
+        if(t == "map[string]interface {}"){
+            return true ;
+        }
+    }else{
+        t := GetType(opts[0])
+        if(t == "map[string]interface {}"){
+            return true ;
+        }
+    }
+    return false ;
+}
+
 func IsStandardMap(v any) bool{
     if(GetType(v) == "map[string]interface {}"){
         return true ;
@@ -171,12 +221,36 @@ func IsStandardMap(v any) bool{
     }
 }
 
-func (this *TypeAssoc) LoadFile(path string) (error){
+func IsJson(src any) bool {
+    if ok,text := IsString(src) ; (ok == true){
+        c := Substr(text,0,1) ;
+        if((c == "{") || (c == "[")){
+            return true ;
+        }
+    }
+    return false ;
+}
+
+func IsYaml(src any) bool {
+    if ok,text := IsString(src) ; (ok == true){
+        c := Substr(text,0,1) ;
+        if((c != "{") && (c != "[")){
+            return true ;
+        }
+    }
+    return false ;
+}
+
+func (this *TypeAssoc) LoadFile(path string) (*TypeAssoc){
     text,_ := File_get_contents(path);
 
-    this.DecodeJson(text);
+    if(IsJson(text)){
+        this.LoadContents("application/json",text) ;
+    }else if(IsYaml(text)){
+        this.LoadContents("text/yaml",text) ;
+    }
 
-    return nil ;
+    return this ;
 }
 
 func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
@@ -185,7 +259,6 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
 
     switch(reflect.TypeOf(src).Kind()){
         case reflect.String:{
-            Debugf("string") ;
             text = src.(string) ;
         }
         default:{
@@ -208,6 +281,11 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
                     return err ;
                 }
             }
+            case "text/yaml":{
+                if err := this.DecodeYaml(src) ; (err != nil){
+                    return err ;
+                }
+            }
             default:{
                 Debugf("err[%s]",rc.contentType) ;
             }
@@ -218,24 +296,50 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
 }
 
 type TypeAssocIterator struct {
-    Skey    []string ;
+    Nkey    []interface{} ;
     Idx     int ;
     Max     int ;
     Opts    Opt
     Assoc *TypeAssoc ;
 }
 
-func (this *TypeAssocIterator) HasNext() bool{
-    return (this.Idx < this.Max) ;
+type TypeKV struct {
+    Key   any
+    Val   *TypeAssoc ;
+}
+
+func (this *TypeKV) GetStringAssoc() (string,*TypeAssoc){
+    return this.Key.(string),this.Val ;
+}
+
+func (this *TypeKV) GetIntAssoc() (int,*TypeAssoc){
+    return this.Key.(int),this.Val ;
+}
+
+func (this *TypeAssocIterator) HasNext(opts ... interface{}) bool{
+
+    if(this.Idx < this.Max){
+        if(len(opts) == 1){
+            t := GetType(opts[0]);
+            if(t == "*BerdyshFrameworkGoLang.TypeKV"){
+                var kv *TypeKV = opts[0].(*TypeKV) ;
+                kv.Key = this.Nkey[this.Idx] ;
+                kv.Val = this.Assoc.GetAssoc(kv.Key) ;
+            }
+        }
+        return true ;
+    }else{
+        return false ;
+    }
 }
 
 func (this *TypeAssocIterator) Rewind() {
-    this.Max = len(this.Skey) ;
+    this.Max = len(this.Nkey) ;
     this.Idx = 0 ;
 }
 
 func (this *TypeAssocIterator) Next() (any, error){
-    ret := this.Skey[this.Idx] ;
+    ret := this.Nkey[this.Idx] ;
     this.Idx += 1 ;
     return ret,nil ;
 }
@@ -243,25 +347,47 @@ func (this *TypeAssocIterator) Next() (any, error){
 func (this *TypeAssocIterator) ReDo() (*TypeAssocIterator){
     this.Idx = 0 ;
     this.Max = 0 ;
+    nkey := make([]interface{},0) ;
+    t:= GetType(this.Assoc.Raw) ;
 
-    if(this.Opts.Keys){
-        if((this.Assoc != nil) && IsStandardMap(this.Assoc.Raw)){
-            skey := make([]string,0) ;
-            for key,_ := range this.Assoc.Raw.(map[string] interface{}){
-                skey = append(skey,key) ;
+    if(t == "[]interface {}"){
+        if(this.Assoc != nil){
+            for key,_ := range this.Assoc.Raw.([] interface{}){
+                nkey = append(nkey,key) ;
             }
-            this.Skey = skey ;
-            this.Max = len(this.Skey) ;
+        }
+    }else if(t == "map[string]interface {}"){
+        if(true){
+            if((this.Assoc != nil) && IsStandardMap(this.Assoc.Raw)){
+                for key,_ := range this.Assoc.Raw.(map[string] interface{}){
+                    nkey = append(nkey,key) ;
+                }
+            }
+        }else{
+            Debugf("連想配列のキーだけじゃない") ;
         }
     }
+
+    this.Nkey = nkey ;
+    this.Max = len(this.Nkey) ;
 
     return this ;
 }
 
 func (this *TypeAssoc) GetAssoc(opts ... interface{}) (*TypeAssoc){
-    k := opts[0].(string) ;
-    m := this.Raw.(map[string]interface{}) ;
-    return NewAssoc().Clone(m[k]) ;
+
+    opt := opts[0] ;
+
+    t := GetType(opt) ;
+    if(t == "string"){
+        k := opt.(string) ;
+        m := this.Raw.(map[string]interface{}) ;
+        return NewAssoc().Clone(m[k]) ;
+    }else{
+        k := opt.(int) ;
+        m := this.Raw.([]interface{}) ;
+        return NewAssoc().Clone(m[k]) ;
+    }
 }
 
 func (this *TypeAssoc) Get(opts ... interface{}) (any){
@@ -312,7 +438,7 @@ func (this *TypeAssoc) SetKV(opts ... interface{}) (*TypeAssoc){
                     this.Raw.(map[string]interface{})[opts[0].(string)] = v.(bool) ;
                 }
                 default:{
-                    Debugf("[%s][%V]",t,v);
+                    this.Raw.(map[string]interface{})[opts[0].(string)] = v ;
                 }
             }
         }
@@ -359,7 +485,6 @@ func (this *TypeAssoc) Iterator(opts ... interface{}) (*TypeAssocIterator){
     ret.Assoc = this ;
     ret.Idx = 0 ;
     ret.Max = 0 ;
-    ret.Skey = make([]string,0) ;
 
     for _,opt := range opts{
         t := GetType(opt) ;
@@ -392,6 +517,9 @@ func (this *TypeAssoc) String() (string){
         }
     }
 }
+
+func (this *TypeAssoc) Strval() (string){ return this.Raw.(string) ; }
+func (this *TypeAssoc) Intval() (int){ return this.Raw.(int) ; }
 
 func (this *TypeAssoc) Type() (string){
     return this.xtype ;

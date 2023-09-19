@@ -92,7 +92,7 @@ func (this *HandlerStore)   ServeHTTP(w http.ResponseWriter, r *http.Request) {
     req.Dump() ;
 }
 
-func    Entry() {
+func    Entry2() {
     X.SlogInit() ;
     X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
 
@@ -104,7 +104,7 @@ func    Entry() {
 
         X.Debugf("Ans[%s]",J.String()) ;
     }
-    if(true){
+    if(false){
 
         optA1 := X.NewAssoc().Append(3,1,4) ;
         optB1 := X.NewAssoc().Append(9).Append(8).Append(7) ;
@@ -119,59 +119,50 @@ func    Entry() {
         fmt.Printf("%s\n",J.ToLower().ToUpper().String()) ;
     }
 
-    if(false){
+    if(true){
         assoc := X.NewAssoc() ;
-        assoc.LoadFile("/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json") ;
+//      path := "/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json" ;
+        path := "/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/openapi.yaml" ;
 
-        i := assoc.Iterator(X.Opt{Keys: true}) ;
+        assoc.LoadFile(path) ;
 
-        for i.HasNext(){
-            key,err := i.Next() ;
-            if(err != nil){
-                X.Debugf("err[%s]",err);
-                break ;
+        fmt.Printf("%s\n",assoc.String()) ;
+
+        if(false){
+            i := assoc.Iterator() ;
+            for i.HasNext(){
+                key,err := i.Next() ;
+                if(err != nil){
+                    X.Debugf("err[%s]",err);
+                    break ;
+                }
+
+                X.Debugf("[%s]",key) ;
+                as := assoc.GetAssoc(key) ;
+                X.Debugf("[%V]",as.Type()) ;
             }
-
-            X.Debugf("[%s]",key) ;
-            as := assoc.GetAssoc(key) ;
-            X.Debugf("[%V]",as.Type()) ;
         }
     }
     X.Debugf("Fin") ;
 }
 
-func    Entry2() {
+func    Entry() {
 
     X.SlogInit() ;
     X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
 
-    if(false){
-        assoc := X.NewAssoc() ;
-        assoc.LoadFile("/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json") ;
-
-        i := assoc.Iterator(X.Opt{Keys: true}) ;
-
-        for i.HasNext(){
-            key,err := i.Next() ;
-            if(err != nil){
-                X.Debugf("err[%s]",err);
-                break ;
-            }
-
-            X.Debugf("[%s]",key) ;
-            as := assoc.GetAssoc(key) ;
-            X.Debugf("[%V]",as.Type()) ;
-        }
-    }
-    X.Debugf("...") ;
-
-    toolBox := X.NewToolBox() ;
+    toolBox := X.NewToolBox() ; _ = toolBox ;
 
     router := mux.NewRouter() ;
     // router := X.NewRouter() ;
     // router := chi.NewRouter() ;
 
-    openAPI,err := X.LoaderOpenAPI(&X.TypeConfigOpenAPI{PathJson: "./swagger.json"}) ;
+//  path := "/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/swagger.json" ;
+    path := "/usr/local/GIT/BerdyshFrameworkGoLang/Tests/ExampleRouter/openapi.yaml" ;
+
+    openAPI,err := X.LoaderOpenAPI(&X.TypeConfigOpenAPI{PathJson: path}) ; _ = openAPI ; _ = err ;
+
+/*
 
     pets    := make(map[string]HandlerPet)      ; _ = pets ;
     users   := make(map[string]HandlerUser)     ; _ = users ;
@@ -197,6 +188,7 @@ func    Entry2() {
             }
         }
     }
+*/
 
     http.ListenAndServe(":9005",router) ;
 }
