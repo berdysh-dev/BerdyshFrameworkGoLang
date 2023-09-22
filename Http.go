@@ -135,17 +135,21 @@ func (this *TypeClient) SelfTest_0002() (error){
         upstream := params ;
 //      upstream := "HOHOHO" ;
 
+        _ = upstream ;
+
 //      url := this.Base + "/user/login" + "?" + params.EncodeCGI() ;
 //      url := this.Base + "/user/hoge" ;
 //      url := this.Base + "/Echo/" + "?" + params.EncodeCGI() ;
         url := this.Base + "/Echo/" ;
 
-        Debugf_("!!URL[%s]\n", url)
+        Debugf_("!!URL[%s]\n", url) ;
 
-        headers := NewAssoc().SetKV("X-Test-Hoge","hoge------------------------------------------------------------------------------------------------") ; _ = headers ;
+        headers := NewAssoc().SetKV("X-Test-Hoge","hoge") ; _ = headers ;
         auth := NewAssoc().SetKV("KIND","Basic").SetKV("USER","user").SetKV("PASS","pass") ; _ = auth ;
 
-        Q := NewAssoc().SetKV("URL",url).SetKV("FORM",upstream).SetKV("HEADERS",headers) ;
+//      Q := NewAssoc().SetKV("URL",url).SetKV("FORM",upstream).SetKV("HEADERS",headers) ;
+
+        Q := NewAssoc().SetKVx(KV{K:METHOD,V:POST},KV{K:URL,V:url}) ;
 
         res := cli.NewRes() ;
 

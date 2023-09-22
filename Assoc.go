@@ -26,9 +26,9 @@ func (this *TypeAssoc) Init() (*TypeAssoc){
 }
 
 type TypeParse struct {
-    ptr     string
-    pkg     string
-    name    string
+    Ptr     bool
+    Pkg     string
+    Name    string
 }
 
 func GetTypeParse(x any) (TypeParse){
@@ -38,19 +38,20 @@ func GetTypeParse(x any) (TypeParse){
     t := GetType(x) ;
 
     if(t[:1] == "*"){
-        ret.ptr = "*" ;
+        ret.Ptr = true ;
         tmp = t[1:] ;
     }else{
+        ret.Ptr = false ;
         tmp = t ;
     }
 
     ar := strings.Split(tmp,".") ;
 
     if(len(ar) == 2){
-        ret.pkg     = ar[0] ;
-        ret.name    = ar[1] ;
+        ret.Pkg     = ar[0] ;
+        ret.Name    = ar[1] ;
     }else{
-        ret.name    = tmp ;
+        ret.Name    = tmp ;
     }
 
     return ret ;
@@ -64,7 +65,7 @@ func IsType(opts ... interface{}) (bool){
     }
 
     if(len(m) == 2){
-        if((m[0].name == m[1].name) && (m[0].ptr == m[1].ptr)){
+        if((m[0].Name == m[1].Name) && (m[0].Ptr == m[1].Ptr)){
             return true ;
         }
     }
@@ -481,18 +482,47 @@ func (this *TypeAssoc) Get(opts ... interface{}) (any){
     return nil ;
 }
 
+func (this *TypeAssoc) InitMap() (*TypeAssoc){
+    if(this.inited == false){
+        this.inited = true ;
+        this.isMap = true ;
+        this.Raw = make(map[string]interface{}) ;
+    }
+    return this ;
+}
+
+func (this *TypeAssoc) IsMap() (bool){
+    return this.isMap ;
+}
+
 func (this *TypeAssoc) SetKVx(opts ... interface{}) (*TypeAssoc){
+
+    this.InitMap() ;
+    if(this.isMap == true){
+        for _,opt := range opts{
+            t := GetTypeParse(opt) ; _ = t ;
+            Debugf("Name[%s][%v]",t.Name,t.Ptr);
+
+            switch(t.Name){
+                case "KV":{
+                    if(! t.Ptr){
+                        kv := opt.(KV) ;
+                        this.Raw.(map[string]interface{})[kv.K] = kv.V ;
+                    }else{
+                        kv := opt.(*KV) ;
+                        this.Raw.(map[string]interface{})[kv.K] = kv.V ;
+                    }
+                }
+            }
+        }
+    }
+
     return this ;
 }
 
 func (this *TypeAssoc) SetKV(opts ... interface{}) (*TypeAssoc){
+    this.InitMap() ;
     if(len(opts) == 2){
-        if(this.inited == false){
-            this.inited = true ;
-            this.isMap = true ;
-            this.Raw = make(map[string]interface{}) ;
-        }
-
         if(this.isMap == true){
             v := opts[1] ;
             t := GetType(v) ;
