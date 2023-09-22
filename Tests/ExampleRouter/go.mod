@@ -71,6 +71,7 @@ require (
 	github.com/microcosm-cc/bluemonday v1.0.25 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/paulbellamy/mango v0.0.0-20171017081843-5dfd24323786 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/revel/config v1.0.0 // indirect
 	github.com/revel/log15 v2.11.20+incompatible // indirect

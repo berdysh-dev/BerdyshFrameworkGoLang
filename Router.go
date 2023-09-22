@@ -4,6 +4,7 @@ import (
 _   "errors"
     "fmt"
     "flag"
+    "log"
     "log/syslog"
     "net/http"
     "net/url"
@@ -29,6 +30,32 @@ type TypeRouterItem struct {
 
     HandlerORG  http.Handler  ;
     HandlerRPC  ExHandlerRPC  ;
+}
+
+type Stack struct {
+    Address string ;
+}
+
+type Env struct {
+}
+
+type Status any ;
+
+type Headers struct {
+}
+
+type Body any ;
+
+func (this *Stack) Run(args ... any){
+}
+
+func (this *Env) Logger() (*log.Logger){
+    return nil ;
+}
+
+func (this *Env) Request() (*http.Request){
+    req := http.Request{};
+    return &req ;
 }
 
 func (this *TypeRouterItem) Init() (*TypeRouterItem){

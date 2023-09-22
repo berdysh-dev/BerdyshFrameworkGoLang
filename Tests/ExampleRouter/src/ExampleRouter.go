@@ -4,6 +4,7 @@ import (
 _   "io"
     "flag"
     "fmt"
+    "log"
     "log/syslog"
     "net/http"
 
@@ -17,6 +18,7 @@ _   "github.com/aerogo/aero"
 _   "github.com/zenazn/goji"
 _   "github.com/zenazn/goji/web"
 _   "github.com/kataras/iris/v12"
+_   "github.com/paulbellamy/mango"
 
 _   "goji.io"
 _   "goji.io/pat"
@@ -32,13 +34,14 @@ import CloudyKit    "local/BerdyshFrameworkGoLang"
 import goji         "local/BerdyshFrameworkGoLang"
 import web          "local/BerdyshFrameworkGoLang"
 
-import mux           "local/BerdyshFrameworkGoLang"
-import echo          "local/BerdyshFrameworkGoLang"
-import middleware    "local/BerdyshFrameworkGoLang"
-import gin           "local/BerdyshFrameworkGoLang"
-import chi           "local/BerdyshFrameworkGoLang"
-import aero          "local/BerdyshFrameworkGoLang"
-import iris          "local/BerdyshFrameworkGoLang"
+import mux          "local/BerdyshFrameworkGoLang"
+import echo         "local/BerdyshFrameworkGoLang"
+import middleware   "local/BerdyshFrameworkGoLang"
+import gin          "local/BerdyshFrameworkGoLang"
+import chi          "local/BerdyshFrameworkGoLang"
+import aero         "local/BerdyshFrameworkGoLang"
+import iris         "local/BerdyshFrameworkGoLang"
+import mango        "local/BerdyshFrameworkGoLang"
 
 type HandlerPet struct {
     OperationId     string ;
@@ -355,6 +358,23 @@ func EntryIris(addr string){
     router.Listen(addr)
 }
 
+func HelloMango(env mango.Env) (mango.Status, mango.Headers, mango.Body) {
+    var logger *log.Logger = env.Logger()
+
+    logger.Println(env.Request().Method,env.Request().RequestURI)
+
+    return 200, mango.Headers{}, mango.Body("Hello World!")
+}
+
+func EntryMango(addr string){
+    app := new(mango.Stack)
+
+    X.Debugf("[%T]",app);
+
+    app.Address = addr ;
+    app.Run(HelloMango)
+}
+
 func    Entry() {
 
     addr := ":9005" ;
@@ -367,7 +387,8 @@ func    Entry() {
     if(false){ EntryCloudyKit(addr) ; }
     if(false){ EntryRevel(addr) ; }
     if(false){ EntryGoji(addr) ; }
-    if(true){ EntryIris(addr) ; }
+    if(false){ EntryIris(addr) ; }
+    if(true){ EntryMango(addr) ; }
 }
 
 

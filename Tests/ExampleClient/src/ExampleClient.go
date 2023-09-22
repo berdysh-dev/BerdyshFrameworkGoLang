@@ -13,9 +13,7 @@ func    Entry() {
     cli.Base = "https://petstore.swagger.io/v2" ;
     cli.Base = "https://berdysh.net" ;
 
-    if err := cli.SelfTest() ; (err != nil){
-        X.Debugf("err[%s]",err);
-    }
+    cli.SelfTest() ;
 }
 
 
