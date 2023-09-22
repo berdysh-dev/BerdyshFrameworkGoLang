@@ -355,7 +355,7 @@ func (this *TypeClient) Call(Q *TypeAssoc,rc *TypeClientRc) (*TypeClient){
         }else{
             s := Strval(payload) ;
             Debugf("Len[%d]\n",len(s)) ;
-            Debugf("BODY<<<%s>>>\n",s) ;
+            Debugf("BODY[%s]\n",s) ;
         }
     }
 
