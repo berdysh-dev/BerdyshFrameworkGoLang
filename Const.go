@@ -11,7 +11,7 @@ const (
     POST    = "POST"
     DELETE  = "DELETE"
 
-    JSON        = "JSON"
-    FORM        = "FORM"
-    MULTIPART   = "MULTIPART"
+    POST_JSON           = "POST_JSON"
+    POST_FORM           = "POST_FORM"
+    POST_MULTIPART      = "POST_MULTIPART"
 )

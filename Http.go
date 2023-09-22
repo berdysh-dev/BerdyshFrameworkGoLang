@@ -364,13 +364,13 @@ func (this *TypeClient) Do(opts ... interface{}){
     if(KIND_UPSTREAM != ""){
         if(content_typeUPSTREAM == ""){
             switch(KIND_UPSTREAM){
-                case JSON:{
+                case POST_JSON:{
                     content_typeUPSTREAM = "application/json" ;
                 }
-                case FORM:{
+                case POST_FORM:{
                     content_typeUPSTREAM = "application/x-www-form-urlencoded" ;
                 }
-                case MULTIPART:{
+                case POST_MULTIPART:{
                     content_typeUPSTREAM = "multipart/form-data" ;
                 }
                 default:{

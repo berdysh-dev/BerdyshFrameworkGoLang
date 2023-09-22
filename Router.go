@@ -1,9 +1,13 @@
 package BerdyshFrameworkGoLang
 
 import (
+_   "errors"
     "fmt"
+    "flag"
     "log/syslog"
     "net/http"
+    "net/url"
+    "sync"
 )
 
 type ExHandlerRPC interface {
@@ -32,7 +36,7 @@ func (this *TypeRouterItem) Init() (*TypeRouterItem){
     return this ;
 }
 
-type TypeRouter struct {
+type Router struct {
     Items []*TypeRouterItem ;
     StrictSlashFlag     bool ;
 
@@ -43,9 +47,97 @@ type TypeRouterRequest struct {
     Croak   map[string]interface{}
 }
 
-type TypeFuncIsMatchItemByhttpRequest func (router *TypeRouter,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool) ;
+type Param struct {
+    Key     string
+    Value   string
+}
 
-func DefaultIsMatchItemByhttpRequest(router *TypeRouter,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool){
+type Params []Param
+
+type Context struct {
+//  writermem       responseWriter
+    Request         *http.Request
+//  Writer          ResponseWriter
+    Params          Params
+//  handlers        HandlersChain
+    index           int8
+    fullPath        string
+//  engine          *Engine
+    params          *Params
+//  skippedNodes    *[]skippedNode
+
+    mu              sync.RWMutex
+    Keys            map[string]any
+//  Errors          errorMsgs
+    Accepted        []string
+    queryCache      url.Values
+    formCache       url.Values
+    sameSite        http.SameSite
+}
+
+type routeNode struct {
+}
+
+type Parameter struct {
+    *routeNode
+    path       string
+    wildcard   int
+}
+
+func (this *Router) AddRoute(args ... any){} ;
+
+func (this *Context) JSON(code int,obj any){}
+func (this *Context) String(args ... any) (error){ return nil ; }
+
+type TypeFuncGinLike func (ctx *Context) ;
+type TypeFuncChiLike func (w http.ResponseWriter,r *http.Request) (error) ;
+type TypeFuncChiRouteLike func (r Router) ;
+
+func (this *Router) GET(args ... any){} ;
+func (this *Router) PUT(args ... any){} ;
+func (this *Router) POST(args ... any){} ;
+func (this *Router) DELETE(args ... any){} ;
+
+func (this *Router) Get(args ... any){} ;
+func (this *Router) Post(args ... any){ } ;
+
+func (this *Router) Put(args ... any){} ;
+func (this *Router) Delete(args ... any){} ;
+
+func (this *Router) Route(args ... any){} ;
+
+func (this *Router) Use(args ... any){} ;
+
+func Logger() (int){ return 0 ; }
+
+func Recover() (int){ return 0 ; }
+
+type H map[string]string ;
+
+// goji.web
+type C struct {
+    URLParams   map[string]string ;
+} ;
+
+func Get(args ... any){
+}
+
+var bind string ;
+
+func init() {
+  flag.StringVar(&bind, "s", "", "文字列の場合の例")
+}
+
+func Serve(){
+    flag.Parse() ;
+
+    Debugf("できたかな？[%s]",bind) ;
+
+}
+
+type TypeFuncIsMatchItemByhttpRequest func (router *Router,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool) ;
+
+func DefaultIsMatchItemByhttpRequest(router *Router,Q *TypeRouterRequest,item *TypeRouterItem,r *http.Request) (bool){
     var isOkMethod = false ; _ = isOkMethod ;
     if(len(item.MethodsMap) == 0){
         isOkMethod = true ;
@@ -58,13 +150,13 @@ func DefaultIsMatchItemByhttpRequest(router *TypeRouter,Q *TypeRouterRequest,ite
     return false ;
 }
 
-func (this *TypeRouter) Init() (*TypeRouter){
+func (this *Router) Init() (*Router){
     this.Items = make([]*TypeRouterItem,0) ;
     this.IsMatchItemByhttpRequest = DefaultIsMatchItemByhttpRequest ;
     return this ;
 }
 
-func (router *TypeRouter) ServeHTTP(w http.ResponseWriter,r *http.Request){
+func (router *Router) ServeHTTP(w http.ResponseWriter,r *http.Request){
     Q := TypeRouterRequest{} ;
     Q.Croak = make(map[string]interface{}) ;
 
@@ -78,21 +170,21 @@ func (router *TypeRouter) ServeHTTP(w http.ResponseWriter,r *http.Request){
     }
 }
 
-func (this *TypeRouter) SetFuncIsMatchItemByhttpRequest(cb TypeFuncIsMatchItemByhttpRequest) (*TypeRouter){
+func (this *Router) SetFuncIsMatchItemByhttpRequest(cb TypeFuncIsMatchItemByhttpRequest) (*Router){
     this.IsMatchItemByhttpRequest = cb ;
     return this ;
 }
 
-func (this *TypeRouter) StrictSlash(b bool) (*TypeRouter){
+func (this *Router) StrictSlash(b bool) (*Router){
     this.StrictSlashFlag = b ;
     return this ;
 }
 
-func (this *TypeRouter) LoaderConfig(args ... any) (*TypeRouter){
+func (this *Router) LoaderConfig(args ... any) (*Router){
     return this ;
 }
 
-func (router *TypeRouter) LoaderRPC(handlerRPCs ... ExHandlerRPC) (*TypeRouter){
+func (router *Router) LoaderRPC(handlerRPCs ... ExHandlerRPC) (*Router){
     for _,h := range handlerRPCs{
         routerItem := TypeRouterItem{}
         routerItem.Init();
@@ -103,7 +195,7 @@ func (router *TypeRouter) LoaderRPC(handlerRPCs ... ExHandlerRPC) (*TypeRouter){
     return router ;
 }
 
-func (this *TypeRouter) AddOperationId(operationId string,handlerORG http.Handler) (*TypeRouter){
+func (this *Router) AddOperationId(operationId string,handlerORG http.Handler) (*Router){
     routerItem := TypeRouterItem{}
     routerItem.Init();
     routerItem.OperationId = operationId ;
@@ -118,7 +210,7 @@ func (routerItem *TypeRouterItem) Methods(args ... any) (*TypeRouterItem){
     return routerItem ;
 }
 
-func (this *TypeRouter) Handle(args ... interface{}) (*TypeRouterItem){
+func (this *Router) Handle(args ... interface{}) (*TypeRouterItem){
     routerItem := TypeRouterItem{}
     routerItem.Init();
     routerItem.Args = args ;
@@ -126,29 +218,61 @@ func (this *TypeRouter) Handle(args ... interface{}) (*TypeRouterItem){
     return &routerItem ;
 }
 
-func (this *TypeRouter) HandleFunc(args ... interface{}) (*TypeRouterItem){
-    routerItem := TypeRouterItem{}
-    routerItem.Init();
-    routerItem.Args = args ;
-    this.Items = append(this.Items,&routerItem) ;
-    return &routerItem ;
-}
-
-func (this *TypeRouter) FuncGet(args ... interface{}) (*TypeRouter){
+func (this *Router) HandleFunc(args ... interface{}) (*Router){
     return this ;
 }
 
-func (this *TypeRouter) FuncPost(args ... interface{}) (*TypeRouter){
+func (this *Router) Queries(args ... interface{}) (*Router){
     return this ;
 }
 
-func (this *TypeRouter) AddHandlerByOperationId(args ... interface{}) (*TypeRouter){
+func (this *Router) Name(args ... interface{}) (*Router){
     return this ;
 }
 
+func (this *Router) FuncGet(args ... interface{}) (*Router){
+    return this ;
+}
 
-func NewRouter() (*TypeRouter){
-    ret := TypeRouter{}
+func (this *Router) FuncPost(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) AddHandlerByOperationId(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) Host(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) PathPrefix(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) Methods(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) Schemes(args ... interface{}) (*Router){
+    return this ;
+}
+
+func (this *Router) Headers(args ... interface{}) (*Router){
+    return this ;
+}
+
+func Default() (*Router){
+    ret := Router{}
+    return ret.Init() ;
+}
+
+func New() (*Router){
+    return NewRouter() ;
+}
+
+func NewRouter() (*Router){
+    ret := Router{}
     return ret.Init() ;
 }
 
@@ -582,11 +706,27 @@ func LoaderOpenAPI(conf *TypeConfigOpenAPI) (*TypeRcLoaderOpenAPI,error){
     return &ret,nil ;
 }
 
-func (this *TypeRouter) LoaderOpenAPI (conf *TypeConfigOpenAPI) (*TypeRouter){
+func (this *Router) LoaderOpenAPI (conf *TypeConfigOpenAPI) (*Router){
     defs,err := LoaderOpenAPI(conf) ;
     _ = defs ;
     _ = err ;
     return this ;
+}
+
+func (this *Router) Start(opts ... any){
+    addr := ":8080" ;
+    if(len(opts) >= 1){
+        addr = opts[0].(string) ;
+    }
+    http.ListenAndServe(addr,this) ;
+}
+
+func (this *Router) Run(opts ... any){
+    addr := ":8080" ;
+    if(len(opts) >= 1){
+        addr = opts[0].(string) ;
+    }
+    http.ListenAndServe(addr,this) ;
 }
 
 type TypeReqRc struct {
