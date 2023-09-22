@@ -72,7 +72,7 @@ type TypeClient struct {
     Hnd     http.Client ;
 }
 
-type TypeClientRc struct {
+type TypeClientRes struct {
     Cli *TypeClient ;
 }
 
@@ -147,9 +147,9 @@ func (this *TypeClient) SelfTest_0002() (error){
 
         Q := NewAssoc().SetKV("URL",url).SetKV("FORM",upstream).SetKV("HEADERS",headers) ;
 
-        rc := cli.NewRc() ; _ = rc ;
+        res := cli.NewRes() ;
 
-        cli.Call(Q,rc) ;
+        cli.Do(Q,res) ;
     }
 
     return nil ;
@@ -159,7 +159,7 @@ func (this *TypeClient) SelfTest() (error){
     return this.SelfTest_0002() ;
 }
 
-func (this *TypeClient) Call(Q *TypeAssoc,rc *TypeClientRc) (*TypeClient){
+func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
 
     var err         error           ; _ = err ;
     var req         *http.Request   ; _ = req ;
@@ -262,7 +262,6 @@ func (this *TypeClient) Call(Q *TypeAssoc,rc *TypeClientRc) (*TypeClient){
 //    req,err = http.NewRequest(method,url,bodyPost) ;
     req,err = http.NewRequest(method,url,bytes.NewBuffer([]byte(post_str))) ;
 
-
     for i := Q.Iterator() ; i.HasNext(kv) ;i.Next(){
         k,_,v := kv.KTV() ;
         switch(k){
@@ -311,16 +310,7 @@ func (this *TypeClient) Call(Q *TypeAssoc,rc *TypeClientRc) (*TypeClient){
         Debugf("KIND[%s][%s][%s]",KIND_UPSTREAM,content_typeUPSTREAM,post_str) ;
     }
 
-    if(false){
-    }else{
-        res, err = this.Hnd.Do(req) ;
-    }
-
-
-//    http.Client.Do
-
-//    req.Body = nil ;
-//    req.GetBody();
+    res, err = this.Hnd.Do(req) ;
 
     if(err != nil){
         Debugf("err[%s]\n",err) ;
@@ -362,13 +352,13 @@ func (this *TypeClient) Call(Q *TypeAssoc,rc *TypeClientRc) (*TypeClient){
     return this ;
 }
 
-func (rc *TypeClientRc) Init(cli *TypeClient) (*TypeClientRc){
+func (rc *TypeClientRes) Init(cli *TypeClient) (*TypeClientRes){
     rc.Cli = cli ;
     return rc ;
 }
 
-func (cli *TypeClient) NewRc() (*TypeClientRc){
-    ret := &TypeClientRc{} ;
+func (cli *TypeClient) NewRes() (*TypeClientRes){
+    ret := &TypeClientRes{} ;
     return ret.Init(cli) ;
 }
 
