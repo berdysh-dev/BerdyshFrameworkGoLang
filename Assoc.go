@@ -347,8 +347,13 @@ type TypeAssocIterator struct {
     Assoc *TypeAssoc ;
 }
 
+type KV struct {
+    K   string ;
+    V   any ;
+}
+
 type TypeKV struct {
-    K   any
+    K   any ;
     V   *TypeAssoc ;
 }
 
@@ -474,6 +479,10 @@ func (this *TypeAssoc) Get(opts ... interface{}) (any){
         }
     }
     return nil ;
+}
+
+func (this *TypeAssoc) SetKVx(opts ... interface{}) (*TypeAssoc){
+    return this ;
 }
 
 func (this *TypeAssoc) SetKV(opts ... interface{}) (*TypeAssoc){
