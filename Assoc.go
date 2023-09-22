@@ -501,8 +501,7 @@ func (this *TypeAssoc) SetKVx(opts ... interface{}) (*TypeAssoc){
     if(this.isMap == true){
         for _,opt := range opts{
             t := GetTypeParse(opt) ; _ = t ;
-            Debugf("Name[%s][%v]",t.Name,t.Ptr);
-
+            Debugf_("Name[%s][%v]",t.Name,t.Ptr);
             switch(t.Name){
                 case "KV":{
                     if(! t.Ptr){
