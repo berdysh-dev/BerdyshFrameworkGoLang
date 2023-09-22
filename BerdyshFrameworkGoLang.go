@@ -5,6 +5,6 @@ import (
 )
 
 func Test(){
-    fmt.Printf("OK-3.\n") ;
+    fmt.Printf("OK-4.\n") ;
 }
 
