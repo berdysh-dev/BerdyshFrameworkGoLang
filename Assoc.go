@@ -26,9 +26,11 @@ func (this *TypeAssoc) Init() (*TypeAssoc){
 }
 
 type TypeParse struct {
-    Ptr     bool
-    Pkg     string
-    Name    string
+    Pkg             string
+    Name            string
+    Kind            string
+    Ptr             bool
+    IsMapStandard   bool ;
 }
 
 func GetTypeParse(x any) (TypeParse){
@@ -36,22 +38,33 @@ func GetTypeParse(x any) (TypeParse){
     tmp := "" ; _ = tmp ;
 
     t := GetType(x) ;
+    rt := reflect.TypeOf(x) ;
 
-    if(t[:1] == "*"){
-        ret.Ptr = true ;
-        tmp = t[1:] ;
+    Debugf_("RT:Kind[%v]",rt.Kind()) ;
+    Debugf_("RT:Name[%s]",rt.Name()) ;
+    Debugf_("RT:PkgPath[%s]",rt.PkgPath()) ;
+
+    ret.Kind = rt.Kind().String() ;
+
+    if((t == "map[string]interface {}") || (t == "map[string]interface{}") || (t == "map[string]any")){
+        ret.IsMapStandard = true ;
     }else{
-        ret.Ptr = false ;
-        tmp = t ;
-    }
+        if(t[:1] == "*"){
+            ret.Ptr = true ;
+            tmp = t[1:] ;
+        }else{
+            ret.Ptr = false ;
+            tmp = t ;
+        }
 
-    ar := strings.Split(tmp,".") ;
+        ar := strings.Split(tmp,".") ;
 
-    if(len(ar) == 2){
-        ret.Pkg     = ar[0] ;
-        ret.Name    = ar[1] ;
-    }else{
-        ret.Name    = tmp ;
+        if(len(ar) == 2){
+            ret.Pkg     = ar[0] ;
+            ret.Name    = ar[1] ;
+        }else{
+            ret.Name    = tmp ;
+        }
     }
 
     return ret ;
@@ -204,6 +217,12 @@ func (this *TypeAssoc) DecodeYaml(src any) (error){
         this.Raw = tmp ;
         return nil ;
     }
+}
+
+func (this *TypeAssoc) SetMapStandard(m map[string]interface {}) (*TypeAssoc){
+    this.Raw = m ;
+
+    return this ;
 }
 
 func (this *TypeAssoc) DecodeJson(src any) (*TypeAssoc){
@@ -607,10 +626,13 @@ func (this *TypeAssoc) Iterator(opts ... interface{}) (*TypeAssocIterator){
 }
 
 func (this *TypeAssoc) EncodeJson() (string){
-    if bin, err := json.Marshal(this.Raw) ; (err != nil){
-        _ = bin ;
+    if bin, err := json.Marshal(this.Raw) ; (err == nil){
+        return string(bin) ;
+    }else{
+        Debugf("err[%s]",err) ;
+        return "" ;
     }
-    return "HOGE" ;
+    return "" ;
 }
 
 func (this *TypeAssoc) String() (string){
@@ -671,7 +693,24 @@ func (this *TypeAssoc) Encode(opts ... interface{}) (string){
 }
 
 func (this *TypeAssoc) Clone(v any) (*TypeAssoc){
-    this.Raw = v ;
+
+    t := GetTypeParse(v) ;
+
+    // Debugf("[%s][%s]",t.Name,t.Kind) ;
+
+    switch(t.Name){
+        case "TypeAssoc":{
+            if(t.Ptr){
+                this.Raw = v.(*TypeAssoc).Raw ;
+            }else{
+                this.Raw = v.(TypeAssoc).Raw ;
+            }
+        }
+        default:{
+            this.Raw = v ;
+        }
+    }
+
     this.xtype = GetType(this.Raw) ;
     return this ;
 }

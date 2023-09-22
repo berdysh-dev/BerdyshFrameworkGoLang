@@ -74,6 +74,25 @@ type TypeClient struct {
 
 type TypeClientRes struct {
     Cli *TypeClient ;
+    Err error ;
+}
+
+func (rc *TypeClientRes) Init(cli *TypeClient) (*TypeClientRes){
+    rc.Cli = cli ;
+    rc.Err = fmt.Errorf("TypeClientRes Not Init.") ;
+    return rc ;
+}
+
+func(this *TypeClientRes) Error(opts ... interface{}) (error){
+    if(len(opts) != 0){
+        this.Err = nil ;
+    }
+    return this.Err ;
+}
+
+func (cli *TypeClient) NewRes() (*TypeClientRes){
+    ret := &TypeClientRes{} ;
+    return ret.Init(cli) ;
 }
 
 func (this *TypeClient) SelfTest_0001() (error){
@@ -159,11 +178,14 @@ func (this *TypeClient) SelfTest_0002() (error){
     return nil ;
 }
 
-func (this *TypeClient) SelfTest() (error){
-    return this.SelfTest_0002() ;
+func (this *TypeClient) SelfTest(){
+    this.SelfTest_0002() ;
 }
 
-func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
+func (this *TypeClient) Do(opts ... interface{}){
+
+    Q   := NewAssoc() ;
+    var rc  *TypeClientRes = nil ;
 
     var err         error           ; _ = err ;
     var req         *http.Request   ; _ = req ;
@@ -179,15 +201,63 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
     content_typeUPSTREAM := ""      ; _ = content_typeUPSTREAM ;
     var upstream any                ; _ = upstream ;            
 
+    for _,opt := range opts{
+        t := GetTypeParse(opt) ;
+
+        Debugf("[%s][%s]",t.Name,t.Kind) ;
+
+        if(t.Kind == "map"){
+            if(t.IsMapStandard){
+                Q.SetMapStandard(opt.(map[string]interface {})) ;
+            }
+        }else{
+            switch(t.Name){
+                case "TypeClientRes":{
+                    switch(t.Kind){
+                        case "ptr":{
+                            rc = opt.(*TypeClientRes) ;
+                        }
+                    }
+                }
+                case "KV":{
+                    switch(t.Kind){
+                        case "slice":{
+                            for _,kv := range opt.([]KV){
+                                Q.SetKV(kv.K,kv.V) ;
+                            }
+                        }
+                    }
+                }
+                case "TypeAssoc":{
+                    switch(t.Kind){
+                        case "ptr":{
+                            Q.Clone(opt.(*TypeAssoc)) ;
+                        }
+                    }
+                }
+                default:{
+                    Debugf("Unknown[%s][%s]",t.Name,t.Kind) ;
+                }
+            }
+        }
+    }
+
+    if(rc == nil){
+        return ;
+    }else{
+        rc.Err = nil ;
+    }
+
     kv := NewKV() ;
     for i := Q.Iterator() ; i.HasNext(kv) ;i.Next(){
         k,_,v := kv.KTV() ;
         switch(k){
-            case "URL":{ url = v.String() ; }
-            case "METHOD":{ method = v.String() ; }
-            case "HEADERS":{
+            case URL:{ url = v.String() ; }
+            case METHOD:{ method = v.String() ; }
+            case HEADERS:{
                 for ii := v.Iterator() ; ii.HasNext(kv) ;ii.Next(){
-                    k,_,v := kv.KTV() ;
+                    K,_,v := kv.KTV() ;
+                    k = Strtolower(K) ;
                     if(k == "content-type"){
                         Debugf("[%s][%s]\n",k,v.String()) ;
                         content_typeUPSTREAM = v.String() ;
@@ -200,7 +270,10 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
         }
     }
 
-    if(url == ""){ return this ; }
+    if(url == ""){
+        rc.Err = fmt.Errorf("URL is nil") ;
+        return ;
+    }
 
     if(method == ""){
         if(KIND_UPSTREAM != ""){
@@ -251,11 +324,8 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
             }
         }
         if(IsType(upstream,"")){
-            Debugf("すとりんぐ[%s]\n",upstream) ;
             post_str = upstream.(string) ;
         }
-
-        post_str = "送信データううう" ;
 
         bodyPost.Set(post_str) ;
     }
@@ -271,7 +341,8 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
         switch(k){
             case "HEADERS":{
                 for ii := v.Iterator() ; ii.HasNext(kv) ;ii.Next(){
-                    k,_,v := kv.KTV() ;
+                    K,_,v := kv.KTV() ;
+                    k = Strtolower(K) ;
                     Debugf("[%s][%s]\n",k,v.String()) ;
                     if(k == "content-type"){
                         req.Header.Set(k.(string),v.String()) ;
@@ -293,13 +364,13 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
     if(KIND_UPSTREAM != ""){
         if(content_typeUPSTREAM == ""){
             switch(KIND_UPSTREAM){
-                case "JSON":{
+                case JSON:{
                     content_typeUPSTREAM = "application/json" ;
                 }
-                case "FORM":{
+                case FORM:{
                     content_typeUPSTREAM = "application/x-www-form-urlencoded" ;
                 }
-                case "MULTIPART":{
+                case MULTIPART:{
                     content_typeUPSTREAM = "multipart/form-data" ;
                 }
                 default:{
@@ -317,8 +388,8 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
     res, err = this.Hnd.Do(req) ;
 
     if(err != nil){
-        Debugf("err[%s]\n",err) ;
-        return this ;
+        rc.Err = err ;
+        return ;
     }
         
     Debugf("StatusCode[%d]\n",res.StatusCode) ;
@@ -328,7 +399,7 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
         header.SetKV(k,v[0])
     }
 
-    Debugf("[%s]",header.String()) ;
+    Debugf_("[%s]",header.String()) ;
 
     defer res.Body.Close() ;
 
@@ -353,17 +424,7 @@ func (this *TypeClient) Do(Q *TypeAssoc,rc *TypeClientRes) (*TypeClient){
         }
     }
 
-    return this ;
-}
-
-func (rc *TypeClientRes) Init(cli *TypeClient) (*TypeClientRes){
-    rc.Cli = cli ;
-    return rc ;
-}
-
-func (cli *TypeClient) NewRes() (*TypeClientRes){
-    ret := &TypeClientRes{} ;
-    return ret.Init(cli) ;
+    return ;
 }
 
 func (cli *TypeClient) Init() (*TypeClient){
