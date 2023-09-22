@@ -33,6 +33,8 @@ type TypeParse struct {
     IsMapStandard   bool ;
 }
 
+type Map map[string]interface{} ;
+
 func GetTypeParse(x any) (TypeParse){
     ret := TypeParse{} ;
     tmp := "" ; _ = tmp ;

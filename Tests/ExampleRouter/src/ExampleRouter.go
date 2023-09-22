@@ -14,9 +14,9 @@ _   "github.com/gin-gonic/gin"
 _   "github.com/go-chi/chi"
 _   "github.com/aerogo/aero"
     "github.com/revel/revel"
-
 _   "github.com/zenazn/goji"
 _   "github.com/zenazn/goji/web"
+_   "github.com/kataras/iris/v12"
 
 _   "goji.io"
 _   "goji.io/pat"
@@ -38,6 +38,7 @@ import middleware    "local/BerdyshFrameworkGoLang"
 import gin           "local/BerdyshFrameworkGoLang"
 import chi           "local/BerdyshFrameworkGoLang"
 import aero          "local/BerdyshFrameworkGoLang"
+import iris          "local/BerdyshFrameworkGoLang"
 
 type HandlerPet struct {
     OperationId     string ;
@@ -344,6 +345,16 @@ func EntryGoji(addr string){
 //    http.ListenAndServe(addr,router)
 }
 
+func EntryIris(addr string){
+    router := iris.New() ;
+
+    router.Handle("GET", "/", func(ctx iris.Context) {
+        ctx.JSON(iris.Map{"message": "ping"})
+    })
+
+    router.Listen(addr)
+}
+
 func    Entry() {
 
     addr := ":9005" ;
@@ -356,6 +367,7 @@ func    Entry() {
     if(false){ EntryCloudyKit(addr) ; }
     if(false){ EntryRevel(addr) ; }
     if(false){ EntryGoji(addr) ; }
+    if(true){ EntryIris(addr) ; }
 }
 
 

@@ -86,7 +86,7 @@ type Parameter struct {
 
 func (this *Router) AddRoute(args ... any){} ;
 
-func (this *Context) JSON(code int,obj any){}
+func (this *Context) JSON(args ... any){}
 func (this *Context) String(args ... any) (error){ return nil ; }
 
 type TypeFuncGinLike func (ctx *Context) ;
@@ -722,6 +722,14 @@ func (this *Router) Start(opts ... any){
 }
 
 func (this *Router) Run(opts ... any){
+    addr := ":8080" ;
+    if(len(opts) >= 1){
+        addr = opts[0].(string) ;
+    }
+    http.ListenAndServe(addr,this) ;
+}
+
+func (this *Router) Listen(opts ... any){
     addr := ":8080" ;
     if(len(opts) >= 1){
         addr = opts[0].(string) ;
