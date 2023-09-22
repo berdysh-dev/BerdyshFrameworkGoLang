@@ -6,6 +6,7 @@ _   "io"
     "log/syslog"
     "net/http"
     "github.com/gorilla/mux"
+    "github.com/gin-gonic/gin"
 _   "github.com/go-chi/chi"
 )
 
@@ -146,7 +147,7 @@ func    Entry2() {
     X.Debugf("Fin") ;
 }
 
-func    Entry() {
+func    Entry3() {
 
     X.SlogInit() ;
     X.Syslog(&X.TypeSyslogConfig{SockAddr:"unix:///dev/log", Facility: syslog.LOG_LOCAL7}) ;
@@ -190,9 +191,35 @@ func    Entry() {
     }
 */
 
+    fmt.Printf("Listn") ;
+
     http.ListenAndServe(":9005",router) ;
 }
 
+func    Entry() {
+
+    router := gin.Default()
+
+    cb_ping := func(ctx *gin.Context){
+
+        for k,v := range ctx.Keys {
+            X.Debugf("[%s][%T]",k,v);
+        }
+
+        for _,param := range ctx.Params {
+            X.Debugf("[%s][%s]",param.Key,param.Value) ;
+        }
+
+        res := gin.H{ "message": "Pong", }
+
+        ctx.JSON(200,res)
+    } ;
+
+    router.GET("/:id",cb_ping) ;
+
+    // router.Run("localhost:9005")
+    http.ListenAndServe(":9005",router) ;
+}
 
 
 

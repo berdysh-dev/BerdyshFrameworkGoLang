@@ -3,7 +3,9 @@ package BerdyshFrameworkGoLang
 import (
     "fmt"
     "reflect"
+    "strings"
     "bytes"
+    "net/url"
     "encoding/json"
     "github.com/goccy/go-yaml"
 )
@@ -21,6 +23,53 @@ type TypeAssoc struct {
 
 func (this *TypeAssoc) Init() (*TypeAssoc){
     return this ;
+}
+
+type TypeParse struct {
+    ptr     string
+    pkg     string
+    name    string
+}
+
+func GetTypeParse(x any) (TypeParse){
+    ret := TypeParse{} ;
+    tmp := "" ; _ = tmp ;
+
+    t := GetType(x) ;
+
+    if(t[:1] == "*"){
+        ret.ptr = "*" ;
+        tmp = t[1:] ;
+    }else{
+        tmp = t ;
+    }
+
+    ar := strings.Split(tmp,".") ;
+
+    if(len(ar) == 2){
+        ret.pkg     = ar[0] ;
+        ret.name    = ar[1] ;
+    }else{
+        ret.name    = tmp ;
+    }
+
+    return ret ;
+}
+
+func IsType(opts ... interface{}) (bool){
+    m := make([]TypeParse,0) ;
+    for _,opt := range opts{
+        x := GetTypeParse(opt) ;
+        m = append(m,x) ;
+    }
+
+    if(len(m) == 2){
+        if((m[0].name == m[1].name) && (m[0].ptr == m[1].ptr)){
+            return true ;
+        }
+    }
+
+    return false ;
 }
 
 func (this *TypeAssoc) GetType(opts ... interface{}) string {
@@ -156,7 +205,7 @@ func (this *TypeAssoc) DecodeYaml(src any) (error){
     }
 }
 
-func (this *TypeAssoc) DecodeJson(src any) (error){
+func (this *TypeAssoc) DecodeJson(src any) (*TypeAssoc){
 
     var text string ;
 
@@ -179,16 +228,15 @@ func (this *TypeAssoc) DecodeJson(src any) (error){
     if err := json.Unmarshal([]byte(text),&m) ; (err != nil){
         Debugf("err[%s]",err) ;
         Debugf("json[%s]",text) ;
-        return err ;
+    }else{
+        if tmp,err := this.conv_r(0,m) ; (err != nil){
+            Debugf("err[%s]",err) ;
+        }else{
+            this.Raw = tmp ;
+        }
     }
 
-    if tmp,err := this.conv_r(1,m) ; (err != nil){
-        Debugf("err[%s]",err) ;
-        return err ;
-    }else{
-        this.Raw = tmp ;
-        return nil ;
-    }
+    return this ;
 }
 
 func (this *TypeAssoc) IsArray() bool{
@@ -253,7 +301,7 @@ func (this *TypeAssoc) LoadFile(path string) (*TypeAssoc){
     return this ;
 }
 
-func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
+func (this *TypeAssoc) LoadContents(contentType string,src any) (*TypeAssoc){
 
     var text string ; _ = text ;
 
@@ -268,7 +316,6 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
 
     if rc,err := ContentTypeParser(contentType) ; (err != nil){
         Debugf("err[%s]",err) ;
-        return err ;
     }else{
         switch(rc.contentType){
             case "application/x-www-form-urlencoded", "application/xml" :{
@@ -278,12 +325,10 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
             }
             case "application/json":{
                 if err := this.DecodeJson(src) ; (err != nil){
-                    return err ;
                 }
             }
             case "text/yaml":{
                 if err := this.DecodeYaml(src) ; (err != nil){
-                    return err ;
                 }
             }
             default:{
@@ -291,8 +336,7 @@ func (this *TypeAssoc) LoadContents(contentType string,src any) (error){
             }
         }
     }
-
-    return nil ;
+    return this ;
 }
 
 type TypeAssocIterator struct {
@@ -304,16 +348,37 @@ type TypeAssocIterator struct {
 }
 
 type TypeKV struct {
-    Key   any
-    Val   *TypeAssoc ;
+    K   any
+    V   *TypeAssoc ;
+}
+
+func NewKV() (*TypeKV){
+    ret := TypeKV{} ;
+    return &ret ;
+}
+
+func (this *TypeKV) KT() (any,string){
+    return this.K,GetType(this.K) ;
+}
+
+func (this *TypeKV) KTV() (any,string,*TypeAssoc){
+    return this.K,GetType(this.K),this.V ;
+}
+
+func (this *TypeKV) GetSS() (string,string){
+    return this.K.(string),this.V.Raw.(string) ;
+}
+
+func (this *TypeKV) GetStringString() (string,string){
+    return this.K.(string),this.V.Raw.(string) ;
 }
 
 func (this *TypeKV) GetStringAssoc() (string,*TypeAssoc){
-    return this.Key.(string),this.Val ;
+    return this.K.(string),this.V ;
 }
 
 func (this *TypeKV) GetIntAssoc() (int,*TypeAssoc){
-    return this.Key.(int),this.Val ;
+    return this.K.(int),this.V ;
 }
 
 func (this *TypeAssocIterator) HasNext(opts ... interface{}) bool{
@@ -323,8 +388,8 @@ func (this *TypeAssocIterator) HasNext(opts ... interface{}) bool{
             t := GetType(opts[0]);
             if(t == "*BerdyshFrameworkGoLang.TypeKV"){
                 var kv *TypeKV = opts[0].(*TypeKV) ;
-                kv.Key = this.Nkey[this.Idx] ;
-                kv.Val = this.Assoc.GetAssoc(kv.Key) ;
+                kv.K = this.Nkey[this.Idx] ;
+                kv.V = this.Assoc.GetAssoc(kv.K) ;
             }
         }
         return true ;
@@ -503,11 +568,23 @@ func (this *TypeAssoc) Iterator(opts ... interface{}) (*TypeAssocIterator){
     return &ret ;
 }
 
+func (this *TypeAssoc) EncodeJson() (string){
+    if bin, err := json.Marshal(this.Raw) ; (err != nil){
+        _ = bin ;
+    }
+    return "HOGE" ;
+}
 
 func (this *TypeAssoc) String() (string){
     var buf bytes.Buffer ; _ = buf ;
 
-    if bin, err := json.Marshal(this.Raw) ; (err != nil){
+    t := GetType(this.Raw)
+
+    Debugf_("!!!!!!!!!!!!!!!!!![%s]",t);
+
+    if(t == "string"){
+        return this.Raw.(string) ;
+    }else if bin, err := json.Marshal(this.Raw) ; (err != nil){
         return "" ;
     }else{
         if err := json.Indent(&buf,bin, "", "  ") ; (err != nil){
@@ -523,6 +600,36 @@ func (this *TypeAssoc) Intval() (int){ return this.Raw.(int) ; }
 
 func (this *TypeAssoc) Type() (string){
     return this.xtype ;
+}
+
+func (this *TypeAssoc) EncodeCGI() (string){
+
+    ret := "" ;
+
+    kv := TypeKV{} ;
+
+    for i := this.Iterator() ; i.HasNext(&kv) ;i.Next(){
+        k ,v := kv.GetStringString() ;
+        if(ret != ""){ ret += "&" ; }
+        ret += url.QueryEscape(k) + "=" + url.QueryEscape(v) ;
+    }
+
+    return ret ;
+}
+
+func (this *TypeAssoc) Encode(opts ... interface{}) (string){
+    for _,opt := range opts {
+        t := GetType(opt) ;
+        switch(t){
+            case "string":{
+                if(opt.(string) == "application/x-www-form-urlencoded"){
+                    return  this.EncodeCGI() ;
+                }
+            }
+        }
+    }
+
+    return "" ;
 }
 
 func (this *TypeAssoc) Clone(v any) (*TypeAssoc){
