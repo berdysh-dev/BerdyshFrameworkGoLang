@@ -1,0 +1,6 @@
+module main
+
+go 1.21
+
+replace local/ExampleTemplate => ./src
+replace local/BerdyshFrameworkGoLang => ../..
