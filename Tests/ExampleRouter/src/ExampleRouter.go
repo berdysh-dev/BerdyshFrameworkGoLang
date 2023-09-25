@@ -4,44 +4,51 @@ import (
 _   "io"
     "flag"
     "fmt"
+_   "time"
     "log"
     "log/syslog"
     "net/http"
-
-_   "github.com/gorilla/mux"
-_   "github.com/labstack/echo/v4"
-_   "github.com/labstack/echo/v4/middleware"
-_   "github.com/gin-gonic/gin"
-_   "github.com/go-chi/chi"
-_   "github.com/aerogo/aero"
-    "github.com/revel/revel"
-_   "github.com/zenazn/goji"
-_   "github.com/zenazn/goji/web"
-_   "github.com/kataras/iris/v12"
-_   "github.com/paulbellamy/mango"
-
-_   "goji.io"
-_   "goji.io/pat"
 )
 
 
 import X "local/BerdyshFrameworkGoLang"
 
-//import CloudyKit    "github.com/CloudyKit/router"
+import revel    "local/BerdyshFrameworkGoLang"
+// import revel "github.com/revel/revel"
 
+//import CloudyKit    "github.com/CloudyKit/router"
 import CloudyKit    "local/BerdyshFrameworkGoLang"
 
 import goji         "local/BerdyshFrameworkGoLang"
 import web          "local/BerdyshFrameworkGoLang"
+// import goji         "github.com/zenazn/goji"
+// import web          "github.com/zenazn/goji/web"
+// "goji.io"
+// "goji.io/pat"
 
 import mux          "local/BerdyshFrameworkGoLang"
+// import mux          "github.com/gorilla/mux"
+
 import echo         "local/BerdyshFrameworkGoLang"
+// import echo         "github.com/labstack/echo/v4"
+
 import middleware   "local/BerdyshFrameworkGoLang"
+// import middleware   "github.com/labstack/echo/v4/middleware"
+
 import gin          "local/BerdyshFrameworkGoLang"
+// import gin          "github.com/gin-gonic/gin"
+
 import chi          "local/BerdyshFrameworkGoLang"
+// import chi          "github.com/go-chi/chi"
+
 import aero         "local/BerdyshFrameworkGoLang"
-import iris         "local/BerdyshFrameworkGoLang"
+// import aero         "github.com/aerogo/aero"
+
+import iris         "github.com/kataras/iris/v12"
+// import iris         "local/BerdyshFrameworkGoLang"
+
 import mango        "local/BerdyshFrameworkGoLang"
+// import mango        "github.com/paulbellamy/mango"
 
 type HandlerPet struct {
     OperationId     string ;
@@ -351,8 +358,12 @@ func EntryGoji(addr string){
 func EntryIris(addr string){
     router := iris.New() ;
 
-    router.Handle("GET", "/", func(ctx iris.Context) {
+    router.Handle("GET", "/ping", func(ctx iris.Context) {
         ctx.JSON(iris.Map{"message": "ping"})
+    })
+
+    router.Handle("GET", "/Go/ping", func(ctx iris.Context) {
+        ctx.JSON(iris.Map{"message": "ping2"})
     })
 
     router.Listen(addr)
@@ -375,9 +386,25 @@ func EntryMango(addr string){
     app.Run(HelloMango)
 }
 
+func EntryVanilla(addr string){
+
+    conf := X.PluginConfig{} ;
+
+    router := X.NewRouter().SetterPluginConfig(&conf) ;
+
+    if err := router.Error() ; (err != nil){
+        fmt.Printf("err[%s]\n",err) ;
+    }else{
+        http.ListenAndServe(addr,router)
+    }
+}
+
 func    Entry() {
 
     addr := ":9005" ;
+
+    if(true){ go X.Syslogd() ; }
+    if(false){ go X.Tick() ; }
 
     if(false){ EntryGin(addr) ; }
     if(false){ EntryGorilla(addr) ; }
@@ -387,8 +414,11 @@ func    Entry() {
     if(false){ EntryCloudyKit(addr) ; }
     if(false){ EntryRevel(addr) ; }
     if(false){ EntryGoji(addr) ; }
+    if(false){ EntryMango(addr) ; }
     if(false){ EntryIris(addr) ; }
-    if(true){ EntryMango(addr) ; }
+
+    if(true){ EntryVanilla(addr) ; }
+
 }
 
 

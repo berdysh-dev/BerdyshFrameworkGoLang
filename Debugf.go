@@ -72,17 +72,21 @@ func Debugf(args ... interface{}){
         }else{
             facility    := syslog.LOG_LOCAL7 ;
             syslog_lv   := syslog.LOG_DEBUG ;
+
+            day := time.Now()
+            const layout = "Jan _2 15:04:05"
+            date := fmt.Sprint(day.Format(layout)) 
+            head := fmt.Sprintf("<%d>%s : ",(facility + syslog_lv),date) ;
+
             ar := strings.Split(message,"\n") ;
             for idx,line := range ar {
                 if((idx > 0) && (line == "")){ continue ; }
-                packet := fmt.Sprintf("<%d>Sep  4 09:09:02 : ",(facility + syslog_lv)) ;
-                packet = packet + line ;
-                rc , _ := conn.Write([]byte(packet)) ; _ = rc ;
+                packet := head + line ;
+                conn.Write([]byte(packet)) ;
             }
             conn.Close() ;
         }
     }
-    
 
     return ;
 }

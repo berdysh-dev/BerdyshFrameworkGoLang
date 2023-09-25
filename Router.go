@@ -30,6 +30,7 @@ type TypeRouterItem struct {
 
     HandlerORG  http.Handler  ;
     HandlerRPC  ExHandlerRPC  ;
+
 }
 
 type Stack struct {
@@ -64,10 +65,10 @@ func (this *TypeRouterItem) Init() (*TypeRouterItem){
 }
 
 type Router struct {
-    Items []*TypeRouterItem ;
-    StrictSlashFlag     bool ;
-
+    Items                       []*TypeRouterItem ;
+    StrictSlashFlag             bool ;
     IsMatchItemByhttpRequest    TypeFuncIsMatchItemByhttpRequest ;
+    Err                         error ;
 }
 
 type TypeRouterRequest struct {
@@ -177,6 +178,18 @@ func DefaultIsMatchItemByhttpRequest(router *Router,Q *TypeRouterRequest,item *T
     return false ;
 }
 
+type PluginConfig struct {
+}
+
+func (this *Router) SetterPluginConfig(*PluginConfig) (* Router){
+    return this ;
+}
+
+func (this *Router) Error(opts ... any) (error){
+    if(len(opts) == 0){ this.Err = nil ; }
+    return this.Err ;
+}
+
 func (this *Router) Init() (*Router){
     this.Items = make([]*TypeRouterItem,0) ;
     this.IsMatchItemByhttpRequest = DefaultIsMatchItemByhttpRequest ;
@@ -184,6 +197,9 @@ func (this *Router) Init() (*Router){
 }
 
 func (router *Router) ServeHTTP(w http.ResponseWriter,r *http.Request){
+
+    Debugf("きたぬる");
+
     Q := TypeRouterRequest{} ;
     Q.Croak = make(map[string]interface{}) ;
 
@@ -289,16 +305,16 @@ func (this *Router) Headers(args ... interface{}) (*Router){
     return this ;
 }
 
-func Default() (*Router){
+func Default(args ... interface{}) (*Router){
     ret := Router{}
     return ret.Init() ;
 }
 
-func New() (*Router){
+func New(args ... interface{}) (*Router){
     return NewRouter() ;
 }
 
-func NewRouter() (*Router){
+func NewRouter(args ... interface{}) (*Router){
     ret := Router{}
     return ret.Init() ;
 }

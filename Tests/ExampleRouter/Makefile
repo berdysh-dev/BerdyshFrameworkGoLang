@@ -24,5 +24,13 @@ tidy:   go.mod
 	${GO} mod tidy
 
 clean:
-	${RM} ${EXE} go.mod
+	${RM} ${EXE} go.mod go.sum
+
+Alpine: AlpineBuild AlpineRun
+
+AlpineBuild:
+	docker build ./ -t ${NAME} -f DockerfileAlpine
+
+AlpineRun:
+	docker run --detach -p 9005:9005 ${NAME}
 
