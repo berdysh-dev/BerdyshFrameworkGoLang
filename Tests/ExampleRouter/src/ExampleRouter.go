@@ -2,6 +2,7 @@ package ExampleRouter
 
 import (
 _   "io"
+    "os"
     "flag"
     "fmt"
 _   "time"
@@ -12,6 +13,11 @@ _   "time"
 
 
 import X "local/BerdyshFrameworkGoLang"
+
+import slog "log/slog"
+import xlog "local/BerdyshFrameworkGoLang"
+
+// import slog "local/BerdyshFrameworkGoLang"
 
 import revel    "local/BerdyshFrameworkGoLang"
 // import revel "github.com/revel/revel"
@@ -286,7 +292,7 @@ func echo_hello(ctx echo.Context) error {
 func EntryEcho(addr string){
     router := echo.New() ;
 
-    router.Use(middleware.Logger())
+//  router.Use(middleware.Logger())
     router.Use(middleware.Recover())
 
     router.GET("/", echo_hello)
@@ -399,6 +405,48 @@ func EntryVanilla(addr string){
     }
 }
 
+type Name struct {
+    First, Last string
+}
+
+func (n Name) LogValue() slog.Value {
+    return slog.GroupValue(
+        slog.String("first" ,   n.First),
+        slog.String("last"  ,   n.Last))
+}
+
+func cb_log (severity string,message string){
+    fmt.Printf("severity[%s]/msg[%s]\n",severity,message) ;
+} ;
+
+func    Test() {
+    logger1 := slog.New      (slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false})) ; _ = logger1 ;
+    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.WriterSyslog, &xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
+
+    slog.SetDefault(logger1) ;
+    xlog.SetDefault(logger2) ;
+
+//  fmt.Printf("logger1[%T]\n",logger1) ;
+//  fmt.Printf("logger2[%T]\n",logger2) ;
+
+    n := Name{"Perry", "Platypus"} ; _ = n ;
+
+//    logger1.Warn("mission accomplished", "agent", n)
+//    logger2.Warn("mission accomplished", "agent", n)
+
+//    slog.Warn("Warn") ;
+//    xlog.Warn("Warn") ;
+
+//  xlog.Debugf("/a[%d]/b[%d]/c[%d]",1,2,3) ;
+
+    xlog.Debug("Debug") ;
+    xlog.Debug("Debug") ;
+    xlog.Info("Info") ;
+    xlog.Alert("Alert") ;
+
+
+}
+
 func    Entry() {
 
     addr := ":9005" ;
@@ -416,8 +464,9 @@ func    Entry() {
     if(false){ EntryGoji(addr) ; }
     if(false){ EntryMango(addr) ; }
     if(false){ EntryIris(addr) ; }
+    if(false){ EntryVanilla(addr) ; }
 
-    if(true){ EntryVanilla(addr) ; }
+    if(true){ Test() ; }
 
 }
 

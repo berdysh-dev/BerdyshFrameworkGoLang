@@ -25,7 +25,7 @@ func GetType2(t interface{}) (string,string) {
 func Debugf_(args ... interface{}){
 }
 
-func Debugf(args ... interface{}){
+func Debugf__(args ... interface{}){
     pc, file, line, ok := runtime.Caller(1) ;
     _ = pc ; _ = file ; _ = ok ;
     _ = line ;

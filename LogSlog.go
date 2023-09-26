@@ -9,17 +9,6 @@ import (
     "log/slog"
 )
 
-const (
-    LevelDebug      slog.Level = slog.LevelDebug
-    LevelInfo       slog.Level = slog.LevelInfo
-    LevelWarn       slog.Level = slog.LevelWarn
-    LevelError      slog.Level = slog.LevelError
-    LevelNotice     slog.Level = 2
-    LevelCritical   slog.Level = 12
-    LevelAlert      slog.Level = 16
-    LevelEmerg      slog.Level = 20
-)
-
 type LogWriter struct {
     syslogFacility  syslog.Priority
 }
@@ -29,6 +18,8 @@ func (this *LogWriter)  SetSyslogFacility(facility syslog.Priority){
 }
 
 func (this *LogWriter) Write(p []byte) (n int, err error){
+
+    fmt.Printf("あああ\n") ;
 
     slogJson := NewAssoc() ;
     slogJson.LoadContents("application/json",p) ;

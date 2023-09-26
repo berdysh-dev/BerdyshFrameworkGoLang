@@ -136,7 +136,7 @@ func (this *Router) Route(args ... any){} ;
 
 func (this *Router) Use(args ... any){} ;
 
-func Logger() (int){ return 0 ; }
+// func Logger() (int){ return 0 ; }
 
 func Recover() (int){ return 0 ; }
 
