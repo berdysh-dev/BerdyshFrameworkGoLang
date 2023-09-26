@@ -5,7 +5,7 @@ import (
     "io"
 _   "os"
     "log/slog"
-_   "log/syslog"
+    "log/syslog"
     "runtime"
     "strings"
     "context"
@@ -219,21 +219,26 @@ func ReplaceAttrSlog2GCP(groups []string, attr slog.Attr) (slog.Attr){
 
 type TypeXWriterFuncOutput  func(opts ... any) ;
 
-type XWriterOptions struct {
-    FuncOutput  TypeXWriterFuncOutput ;
-}
-
 type XWriter struct {
     Mode int ;
-    FuncOutput  TypeXWriterFuncOutput ;
+    Disable             bool ;
+    FuncOutput          TypeXWriterFuncOutput ;
+    SyslogFacility      syslog.Priority ;
+    SyslogLevel         syslog.Priority ;
+    SyslogAddr          string ;
 }
 
-func (this *XWriter) Setter(opts ... any){
-    var opt XWriterOptions ;
-    opt = opts[0].(XWriterOptions) ; _ = opt ;
-    if(opt.FuncOutput != nil){
-        this.FuncOutput = opt.FuncOutput
+func (this *XWriter) Setter(opts ... any) (*XWriter){
+    var def XWriter ;
+
+    for _,opt := range opts{
+        def = opts[0].(XWriter) ; _ = opt ;
+        this.Disable = def.Disable ;
+        if(def.FuncOutput != nil){
+            this.FuncOutput = def.FuncOutput
+        }
     }
+    return this ;
 }
 
 func (this *XWriter) Write(p []byte) (n int, err error){
@@ -253,14 +258,13 @@ func (this *XWriter) Write(p []byte) (n int, err error){
 
 type IF_XWriter interface {
     io.Writer
-
-    Setter(opts ... any)
+    Setter(opts ... any) (*XWriter)
 }
 
-var WriterStdout    IF_XWriter = &XWriter{Mode:1} ;
-var WriterStderr    IF_XWriter = &XWriter{Mode:2} ;
-var WriterSyslog    IF_XWriter = &XWriter{Mode:3} ;
-var WriterHook      IF_XWriter = &XWriter{Mode:4} ;
+var XWriterStdout   IF_XWriter = &XWriter{Mode:1} ;
+var XWriterStderr   IF_XWriter = &XWriter{Mode:2} ;
+var XWriterSyslog   IF_XWriter = &XWriter{Mode:3} ;
+var XWriterHook     IF_XWriter = &XWriter{Mode:4} ;
 
 func NewLogger(opts ... any) (*Logger){
 
