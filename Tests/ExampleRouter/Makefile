@@ -1,4 +1,6 @@
 NAME = ExampleRouter
+TAG = router
+
 EXE = ${NAME}.exe
 
 GOROOT = /usr/local/go
@@ -29,8 +31,7 @@ clean:
 Alpine: AlpineBuild AlpineRun
 
 AlpineBuild:
-	docker build ./ -t ${NAME} -f DockerfileAlpine
+	docker build -t ${TAG} -f DockerfileAlpine ../..
 
 AlpineRun:
-	docker run --detach -p 9005:9005 ${NAME}
-
+	docker run -a stdout -a stderr -p 9005:9005 ${TAG}

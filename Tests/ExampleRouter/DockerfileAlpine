@@ -1,0 +1,19 @@
+FROM alpine:latest
+
+RUN apk update
+RUN apk add --update --no-cache bash tcsh git vim openssl bind-tools busybox busybox-extras build-base linux-headers alpine-sdk autoconf re2c bison cmake musl-dev curl
+RUN cd /tmp/ ; wget https://go.dev/dl/go1.21.1.linux-amd64.tar.gz ; tar -C /usr/local -xzf /tmp/go1.21.1.linux-amd64.tar.gz
+
+RUN mkdir -p /usr/local/src/BerdyshFrameworkGoLang
+RUN mkdir -p /usr/local/src/BerdyshFrameworkGoLang/Tests
+
+COPY * /usr/local/src/BerdyshFrameworkGoLang/
+COPY Tests/ /usr/local/src/BerdyshFrameworkGoLang/Tests
+
+COPY Tests/ExampleRouter/Alpine/entrypoint.sh   /usr/local/bin/entrypoint.sh
+
+RUN cd /usr/local/src/BerdyshFrameworkGoLang/Tests/ExampleRouter ; export GOROOT="/usr/local/go" ; make clean tidy build ;
+
+EXPOSE 9005
+
+ENTRYPOINT ["/bin/sh","/usr/local/bin/entrypoint.sh"]
