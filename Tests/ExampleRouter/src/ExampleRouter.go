@@ -421,7 +421,9 @@ func cb_log (severity string,message string){
 
 func    Test() {
     logger1 := slog.New      (slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{AddSource: false})) ; _ = logger1 ;
-    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.WriterSyslog, &xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
+    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.WriterHook, &xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
+
+    xlog.WriterHook.Setter(xlog.XWriterOptions{FuncOutput: func(opts ... any){ fmt.Printf("CB>>> %s\n",opts[0].(string)) ;}}) ;
 
     slog.SetDefault(logger1) ;
     xlog.SetDefault(logger2) ;
@@ -434,15 +436,9 @@ func    Test() {
 //    logger1.Warn("mission accomplished", "agent", n)
 //    logger2.Warn("mission accomplished", "agent", n)
 
-//    slog.Warn("Warn") ;
-//    xlog.Warn("Warn") ;
+    xlog.Debugf("/a[%d]/b[%d]/c[%d]",1,2,3) ;
 
-//  xlog.Debugf("/a[%d]/b[%d]/c[%d]",1,2,3) ;
-
-    xlog.Debug("Debug") ;
-    xlog.Debug("Debug") ;
-    xlog.Info("Info") ;
-    xlog.Alert("Alert") ;
+    slog.Debug("Debug") ;
 
 
 }
