@@ -24,6 +24,17 @@ const (
     LevelEmerg      slog.Level = 20
 )
 
+const (
+    DEBUG       = "DEBUG"
+    INFO        = "INFO"
+    NOTICE      = "NOTICE"
+    WARNING     = "WARNING"
+    ERROR       = "ERROR"
+    CRITICAL    = "CRITICAL"
+    ALERT       = "ALERT"
+    EMERGENCY   = "EMERGENCY"
+)
+
 type Value struct {
 }
 
@@ -116,14 +127,32 @@ func (this *Logger) Criticalf   (f string,a ... any){ this.Logf(LevelCritical   
 func (this *Logger) Alertf      (f string,a ... any){ this.Logf(LevelAlert      ,f,a ...) ; }
 func (this *Logger) Emergf      (f string,a ... any){ this.Logf(LevelEmerg      ,f,a ...) ; }
 
-func (this *Logger) Debug   (msg string, a ... any){ this.Log(LevelDebug        ,msg,a ...) ; }
-func (this *Logger) Info    (msg string, a ... any){ this.Log(LevelInfo         ,msg,a ...) ; }
-func (this *Logger) Warn    (msg string, a ... any){ this.Log(LevelWarn         ,msg,a ...) ; }
-func (this *Logger) Error   (msg string, a ... any){ this.Log(LevelError        ,msg,a ...) ; }
-func (this *Logger) Notice  (msg string, a ... any){ this.Log(LevelNotice       ,msg,a ...) ; }
-func (this *Logger) Critical(msg string, a ... any){ this.Log(LevelCritical     ,msg,a ...) ; }
-func (this *Logger) Alert   (msg string, a ... any){ this.Log(LevelAlert        ,msg,a ...) ; }
-func (this *Logger) Emerg   (msg string, a ... any){ this.Log(LevelEmerg        ,msg,a ...) ; }
+func (this *Logger) Debugf_     (f string,a ... any){ ; }
+func (this *Logger) Infof_      (f string,a ... any){ ; }
+func (this *Logger) Warnf_      (f string,a ... any){ ; }
+func (this *Logger) Errorf_     (f string,a ... any){ ; }
+func (this *Logger) Noticef_    (f string,a ... any){ ; }
+func (this *Logger) Criticalf_  (f string,a ... any){ ; }
+func (this *Logger) Alertf_     (f string,a ... any){ ; }
+func (this *Logger) Emergf_     (f string,a ... any){ ; }
+
+func (this *Logger) Debug       (msg string, a ... any){ this.Log(LevelDebug        ,msg,a ...) ; }
+func (this *Logger) Info        (msg string, a ... any){ this.Log(LevelInfo         ,msg,a ...) ; }
+func (this *Logger) Warn        (msg string, a ... any){ this.Log(LevelWarn         ,msg,a ...) ; }
+func (this *Logger) Error       (msg string, a ... any){ this.Log(LevelError        ,msg,a ...) ; }
+func (this *Logger) Notice      (msg string, a ... any){ this.Log(LevelNotice       ,msg,a ...) ; }
+func (this *Logger) Critical    (msg string, a ... any){ this.Log(LevelCritical     ,msg,a ...) ; }
+func (this *Logger) Alert       (msg string, a ... any){ this.Log(LevelAlert        ,msg,a ...) ; }
+func (this *Logger) Emerg       (msg string, a ... any){ this.Log(LevelEmerg        ,msg,a ...) ; }
+
+func (this *Logger) Debug_      (msg string, a ... any){ ; }
+func (this *Logger) Info_       (msg string, a ... any){ ; }
+func (this *Logger) Warn_       (msg string, a ... any){ ; }
+func (this *Logger) Error_      (msg string, a ... any){ ; }
+func (this *Logger) Notice_     (msg string, a ... any){ ; }
+func (this *Logger) Critical_   (msg string, a ... any){ ; }
+func (this *Logger) Alert_      (msg string, a ... any){ ; }
+func (this *Logger) Emerg_      (msg string, a ... any){ ; }
 
 func Debugf     (f string,a ... any){ DefaultLogger.Debugf      (f,a ...) ; }
 func Infof      (f string,a ... any){ DefaultLogger.Infof       (f,a ...) ; }
@@ -134,22 +163,36 @@ func Criticalf  (f string,a ... any){ DefaultLogger.Criticalf   (f,a ...) ; }
 func Alertf     (f string,a ... any){ DefaultLogger.Alertf      (f,a ...) ; }
 func Emergf     (f string,a ... any){ DefaultLogger.Emergf      (f,a ...) ; }
 
-func Debug   (msg string, args ...any){ DefaultLogger.Debug     (msg,args ...) ; }
-func Info    (msg string, args ...any){ DefaultLogger.Info      (msg,args ...) ; }
-func Warn    (msg string, args ...any){ DefaultLogger.Warn      (msg,args ...) ; }
-func Error   (msg string, args ...any){ DefaultLogger.Error     (msg,args ...) ; }
-func Notice  (msg string, args ...any){ DefaultLogger.Notice    (msg,args ...) ; }
-func Critical(msg string, args ...any){ DefaultLogger.Critical  (msg,args ...) ; }
-func Alert   (msg string, args ...any){ DefaultLogger.Alert     (msg,args ...) ; }
-func Emerg   (msg string, args ...any){ DefaultLogger.Emerg     (msg,args ...) ; }
+func Debugf_    (f string,a ... any){ ; }
+func Infof_     (f string,a ... any){ ; }
+func Warnf_     (f string,a ... any){ ; }
+func Errorf_    (f string,a ... any){ ; }
+func Noticef_   (f string,a ... any){ ; }
+func Criticalf_ (f string,a ... any){ ; }
+func Emergf_    (f string,a ... any){ ; }
+
+func Debug      (msg string, args ...any){ DefaultLogger.Debug     (msg,args ...) ; }
+func Info       (msg string, args ...any){ DefaultLogger.Info      (msg,args ...) ; }
+func Warn       (msg string, args ...any){ DefaultLogger.Warn      (msg,args ...) ; }
+func Error      (msg string, args ...any){ DefaultLogger.Error     (msg,args ...) ; }
+func Notice     (msg string, args ...any){ DefaultLogger.Notice    (msg,args ...) ; }
+func Critical   (msg string, args ...any){ DefaultLogger.Critical  (msg,args ...) ; }
+func Alert      (msg string, args ...any){ DefaultLogger.Alert     (msg,args ...) ; }
+func Emerg      (msg string, args ...any){ DefaultLogger.Emerg     (msg,args ...) ; }
+
+func Debug_     (msg string, args ...any){ ; }
+func Info_      (msg string, args ...any){ ; }
+func Warn_      (msg string, args ...any){ ; }
+func Error_     (msg string, args ...any){ ; }
+func Notice_    (msg string, args ...any){ ; }
+func Critical_  (msg string, args ...any){ ; }
+func Alert_     (msg string, args ...any){ ; }
+func Emerg_     (msg string, args ...any){ ; }
 
 func NewJSONHandler(w io.Writer, opts *HandlerOptions) *JSONHandler{
-
     ret := JSONHandler{} ;
-
     ret.w = w ;
     ret.opts = opts ;
-
     return &ret ;
 }
 
@@ -196,7 +239,6 @@ func (this *SLogJsonWriter) Write(p []byte) (n int, err error){
     return len(p) , nil ;
 }
 
-
 func NewSLogJsonWriter() (*SLogJsonWriter){
     ret := SLogJsonWriter{} ;
     ret.Hook  = &ret ;
@@ -207,14 +249,14 @@ func ReplaceAttrSlog(groups []string, attr slog.Attr) (slog.Attr){
     if(attr.Key == slog.LevelKey){
         level := attr.Value.Any().(slog.Level) ;
         switch(level){
-        case LevelDebug     : attr.Value = slog.StringValue("DEBUG") ;
-        case LevelInfo      : attr.Value = slog.StringValue("INFO") ;
-        case LevelNotice    : attr.Value = slog.StringValue("NOTICE") ;
-        case LevelWarn      : attr.Value = slog.StringValue("WARNING") ;
-        case LevelError     : attr.Value = slog.StringValue("ERROR") ;
-        case LevelCritical  : attr.Value = slog.StringValue("CRITICAL") ;
-        case LevelAlert     : attr.Value = slog.StringValue("ALERT") ;
-        case LevelEmerg     : attr.Value = slog.StringValue("EMERGENCY") ;
+        case LevelDebug     : attr.Value = slog.StringValue(DEBUG) ;
+        case LevelInfo      : attr.Value = slog.StringValue(INFO) ;
+        case LevelNotice    : attr.Value = slog.StringValue(NOTICE) ;
+        case LevelWarn      : attr.Value = slog.StringValue(WARNING) ;
+        case LevelError     : attr.Value = slog.StringValue(ERROR) ;
+        case LevelCritical  : attr.Value = slog.StringValue(CRITICAL) ;
+        case LevelAlert     : attr.Value = slog.StringValue(ALERT) ;
+        case LevelEmerg     : attr.Value = slog.StringValue(EMERGENCY) ;
         }
     }
     return attr ;
@@ -231,14 +273,14 @@ func ReplaceAttrSlogGoogleCloudLogging(groups []string, attr slog.Attr) (slog.At
         attr.Key = "severity" ;
         level := attr.Value.Any().(slog.Level) ;
         switch(level){
-        case LevelDebug     : attr.Value = slog.StringValue("DEBUG") ;
-        case LevelInfo      : attr.Value = slog.StringValue("INFO") ;
-        case LevelNotice    : attr.Value = slog.StringValue("NOTICE") ;
-        case LevelWarn      : attr.Value = slog.StringValue("WARNING") ;
-        case LevelError     : attr.Value = slog.StringValue("ERROR") ;
-        case LevelCritical  : attr.Value = slog.StringValue("CRITICAL") ;
-        case LevelAlert     : attr.Value = slog.StringValue("ALERT") ;
-        case LevelEmerg     : attr.Value = slog.StringValue("EMERGENCY") ;
+        case LevelDebug     : attr.Value = slog.StringValue(DEBUG) ;
+        case LevelInfo      : attr.Value = slog.StringValue(INFO) ;
+        case LevelNotice    : attr.Value = slog.StringValue(NOTICE) ;
+        case LevelWarn      : attr.Value = slog.StringValue(WARNING) ;
+        case LevelError     : attr.Value = slog.StringValue(ERROR) ;
+        case LevelCritical  : attr.Value = slog.StringValue(CRITICAL) ;
+        case LevelAlert     : attr.Value = slog.StringValue(ALERT) ;
+        case LevelEmerg     : attr.Value = slog.StringValue(EMERGENCY) ;
         }
     }
     return attr ;

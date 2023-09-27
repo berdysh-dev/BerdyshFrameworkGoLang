@@ -6,13 +6,13 @@ import (
     "strings"
 )
 
-import  CloudLoggingV2  "cloud.google.com/go/logging/apiv2"
-import  MonitoGCP       "google.golang.org/genproto/googleapis/api/monitoredres"
-import  LogProtoBufAPI  "google.golang.org/genproto/googleapis/logging/v2"
-import  LogProtoBufType "google.golang.org/genproto/googleapis/logging/type"
-import  OptionApiGCP    "google.golang.org/api/option"
+import  CloudLoggingV2      "cloud.google.com/go/logging/apiv2"
+import  MonitoGCP           "google.golang.org/genproto/googleapis/api/monitoredres"
+import  LogProtoBufAPI      "google.golang.org/genproto/googleapis/logging/v2"
+import  LogProtoBufType     "google.golang.org/genproto/googleapis/logging/type"
+import  LogProtoBufStruct   "google.golang.org/protobuf/types/known/structpb"
 
-import  structpb        "google.golang.org/protobuf/types/known/structpb"
+import  OptionApiGCP    "google.golang.org/api/option"
 
 type XWriterOptionGoogleCloudLogging struct {
     LogName     string ;
@@ -31,7 +31,11 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
 
     formattedLogName := sprintf("projects/%s/logs/%s",ProjectID,LogName) ;
 
-    // printf("!!![%s]",string(p)) ;
+    c := Substr(ApiKey,0,1) ;
+    if(c != "{"){ ApiKey,_ = File_get_contents(ApiKey) ; }
+
+    printf_("key[%s][%s]!!!!!!!!!!!!\n",ApiKey,c) ;
+    printf_("json[%s]\n",string(p)) ;
 
     ctx := context.Background() ; _ = ctx ;
 
@@ -60,27 +64,28 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
                 case "severity":{
                     // printf("severity[%s]\n",kv.V.Raw.(string)) ;
                     switch(kv.V.Raw.(string)){
-                        case "DEBUG"    :{ entry.Severity  = LogProtoBufType.LogSeverity_DEBUG      ; }
-                        case "INFO"     :{ entry.Severity  = LogProtoBufType.LogSeverity_INFO       ; }
-                        case "NOTICE"   :{ entry.Severity  = LogProtoBufType.LogSeverity_NOTICE     ; }
-                        case "WARNING"  :{ entry.Severity  = LogProtoBufType.LogSeverity_WARNING    ; }
-                        case "ERROR"    :{ entry.Severity  = LogProtoBufType.LogSeverity_ERROR      ; }
-                        case "CRITICAL" :{ entry.Severity  = LogProtoBufType.LogSeverity_CRITICAL   ; }
-                        case "ALERT"    :{ entry.Severity  = LogProtoBufType.LogSeverity_ALERT      ; }
-                        case "EMERGENCY":{ entry.Severity  = LogProtoBufType.LogSeverity_EMERGENCY  ; }
+                        case DEBUG      :{ entry.Severity  = LogProtoBufType.LogSeverity_DEBUG      ; }
+                        case INFO       :{ entry.Severity  = LogProtoBufType.LogSeverity_INFO       ; }
+                        case NOTICE     :{ entry.Severity  = LogProtoBufType.LogSeverity_NOTICE     ; }
+                        case WARNING    :{ entry.Severity  = LogProtoBufType.LogSeverity_WARNING    ; }
+                        case ERROR      :{ entry.Severity  = LogProtoBufType.LogSeverity_ERROR      ; }
+                        case CRITICAL   :{ entry.Severity  = LogProtoBufType.LogSeverity_CRITICAL   ; }
+                        case ALERT      :{ entry.Severity  = LogProtoBufType.LogSeverity_ALERT      ; }
+                        case EMERGENCY  :{ entry.Severity  = LogProtoBufType.LogSeverity_EMERGENCY  ; }
                     }
                 }
             }
             m[kv.K.(string)] = kv.V.Raw ;
         }
         
-        j , err := structpb.NewStruct(m) ;
+        jsonPayload , err := LogProtoBufStruct.NewStruct(m) ;
+        // (x *Struct) UnmarshalJSON(b []byte) error
 
         if(err != nil){
             printf("err[%s]\n",err) ;
-            entry.Payload   = &LogProtoBufAPI.LogEntry_TextPayload{"ERROR"} ;
+            entry.Payload   = &LogProtoBufAPI.LogEntry_TextPayload{TextPayload: string(p) } ;
         }else{
-            entry.Payload   = &LogProtoBufAPI.LogEntry_JsonPayload{JsonPayload: j } ;
+            entry.Payload   = &LogProtoBufAPI.LogEntry_JsonPayload{JsonPayload: jsonPayload } ;
         }
 
         location := LogProtoBufAPI.LogEntrySourceLocation{} ;

@@ -17,9 +17,6 @@ func GetType2(t interface{}) (string,string) {
     return sprintf("%s",reflect.TypeOf(t)), sprintf("%T",t) ;
 }
 
-func Debugf_(args ... interface{}){
-}
-
 func Getmypid() int{
     return  os.Getpid() ;
 }
