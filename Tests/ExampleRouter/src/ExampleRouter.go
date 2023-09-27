@@ -423,15 +423,13 @@ func    Test() {
     xlog.XWriterSyslog.Setter(xlog.XWriter{SyslogFacility: syslog.LOG_LOCAL7,SyslogAddr: "unix:///dev/log"}) ;
     xlog.XWriterHook.Setter(xlog.XWriter{FuncOutput: func(opts ... any){ fmt.Printf("CB>>> %s\n",opts[0].(string)) ;}}) ;
 
-    logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog    ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger1 ;
-    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterHook      ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
+    logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog                ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger1 ;
+    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterHook                  ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
+    logger3 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterGoogleCloudLogging    ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlogGoogleCloudLogging})) ; _ = logger3 ;
 
-    xlog.SetDefault(logger1) ;
+    xlog.SetDefault(logger3) ;
 
-    xlog.Debugf("/a[%d]/b[%d]/c[%d]",1,2,3) ;
-    xlog.Debug("Debug") ;
-
-
+    slog.Debug("Debug") ;
 }
 
 func    Entry() {

@@ -193,7 +193,7 @@ func ReplaceAttrSlog(groups []string, attr slog.Attr) (slog.Attr){
     return attr ;
 }
 
-func ReplaceAttrSlog2GCP(groups []string, attr slog.Attr) (slog.Attr){
+func ReplaceAttrSlogGoogleCloudLogging(groups []string, attr slog.Attr) (slog.Attr){
     if(attr.Key == "time"){
         attr.Key = "timestamp" ;
     }
@@ -241,30 +241,54 @@ func (this *XWriter) Setter(opts ... any) (*XWriter){
     return this ;
 }
 
-func (this *XWriter) Write(p []byte) (n int, err error){
-
-    if(this.FuncOutput != nil){
-        this.FuncOutput(Trim(string(p))) ;
-    }else{
-        switch(this.Mode){
-            default:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
-            }
-        }
-    }
-
-    return n,nil ;
-}
+const (
+    XWriterEnumNull     = iota
+    XWriterEnumStdout
+    XWriterEnumStderr
+    XWriterEnumSyslog
+    XWriterEnumHook
+    XWriterEnumGoogleCloudLogging
+)
 
 type IF_XWriter interface {
     io.Writer
     Setter(opts ... any) (*XWriter)
 }
 
-var XWriterStdout   IF_XWriter = &XWriter{Mode:1} ;
-var XWriterStderr   IF_XWriter = &XWriter{Mode:2} ;
-var XWriterSyslog   IF_XWriter = &XWriter{Mode:3} ;
-var XWriterHook     IF_XWriter = &XWriter{Mode:4} ;
+func (this *XWriter) Write(p []byte) (n int, err error){
+
+    if(this.FuncOutput != nil){
+        this.FuncOutput(Trim(string(p))) ;
+    }else{
+        switch(this.Mode){
+            case XWriterEnumStdout:{
+                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumStderr:{
+                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumSyslog:{
+                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumHook:{
+                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumGoogleCloudLogging:{
+                return this.WriteGoogleCloudLogging(p) ;
+            }
+            default:{
+                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+            }
+        }
+    }
+    return n,nil ;
+}
+
+var XWriterStdout               IF_XWriter = &XWriter{Mode: XWriterEnumStdout} ;
+var XWriterStderr               IF_XWriter = &XWriter{Mode: XWriterEnumStderr} ;
+var XWriterSyslog               IF_XWriter = &XWriter{Mode: XWriterEnumSyslog} ;
+var XWriterHook                 IF_XWriter = &XWriter{Mode: XWriterEnumHook} ;
+var XWriterGoogleCloudLogging   IF_XWriter = &XWriter{Mode: XWriterEnumGoogleCloudLogging} ;
 
 func NewLogger(opts ... any) (*Logger){
 
