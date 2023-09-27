@@ -423,6 +423,8 @@ func    Test() {
     xlog.XWriterSyslog.Setter(xlog.XWriter{SyslogFacility: syslog.LOG_LOCAL7,SyslogAddr: "unix:///dev/log"}) ;
     xlog.XWriterHook.Setter(xlog.XWriter{FuncOutput: func(opts ... any){ fmt.Printf("CB>>> %s\n",opts[0].(string)) ;}}) ;
 
+    xlog.XWriterGoogleCloudLogging.Setter(xlog.XWriterOptionGoogleCloudLogging{}) ;
+
     logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog                ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger1 ;
     logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterHook                  ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
     logger3 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterGoogleCloudLogging    ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlogGoogleCloudLogging})) ; _ = logger3 ;

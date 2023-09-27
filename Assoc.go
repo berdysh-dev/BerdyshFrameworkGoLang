@@ -135,7 +135,9 @@ func (this *TypeAssoc) conv_r (mode int,src interface{}) (interface{},error){
             for k, v := range src.(map[string]interface{}) {
                 var k2 string ;
 
-                if(mode == 1){
+                if(mode == 0){
+                    k2 = k ;
+                }else if(mode == 1){
                     k2 = UC(k) ;
                 }else{
                     k2 = LC(k) ;

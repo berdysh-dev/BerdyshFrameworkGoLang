@@ -3,7 +3,7 @@ package BerdyshFrameworkGoLang
 import (
     "fmt"
     "io"
-_   "os"
+    "os"
     "log/slog"
     "log/syslog"
     "runtime"
@@ -24,7 +24,6 @@ const (
     LevelAlert      slog.Level = 16
     LevelEmerg      slog.Level = 20
 )
-
 
 type Value struct {
 }
@@ -62,20 +61,49 @@ func SetDefault(logger *Logger){
 }
 
 func (this *Logger) Log(level slog.Level,msg string,a ... any){
-    // fmt.Printf("きた[%d][%s]\n",level,msg) ;
-
     this.slogLogger.Log(context.Background(),level,msg,a ...) ;
+}
+
+func IsPathGOROOT(path string) bool{
+    p2,ok := os.LookupEnv("GOROOT") ;
+    if(ok){
+        a := strings.Split(p2,      "/") ;
+        b := strings.Split(path,    "/") ;
+        for idx,_ := range a{
+            if(a[idx] != b[idx]){
+                return false ;
+            }
+        }
+        return true ;
+    }else{
+        return false ;
+    }
 }
 
 func (this *Logger) Logf(level slog.Level,f string,a ... any){
     var msg string ;
-    if(true){
-        _, fileFull, line, _ := runtime.Caller(1) ;
-        paths := strings.Split(fileFull, "/") ;
-        file := paths[len(paths)-1] ;
-        msg = fmt.Sprintf("%04d:%s:%s",line,file,fmt.Sprintf(f,a ...)) ;
-    }else{
+    mode := XWriterEnumNull ;
+    if(fmt.Sprintf("%T",this.Jh.w) == "*BerdyshFrameworkGoLang.XWriter"){
+        mode = this.Jh.w.(*XWriter).Mode ;
+    }
+    if(mode == XWriterEnumGoogleCloudLogging){
         msg = fmt.Sprintf(f,a ...) ;
+    }else{
+        dept := 1 ;
+        for {
+            _, fileFull, line, ok := runtime.Caller(dept) ;
+            if(ok){
+                paths := strings.Split(fileFull, "/") ;
+                file := paths[len(paths)-1] ;
+                if((file == "WriteGoogleCloudLogging.go") || (file == "Logger.go") || IsPathGOROOT(fileFull)){
+                    dept++ ; continue ;
+                }
+                msg = fmt.Sprintf("%04d:%s:%s",line,file,fmt.Sprintf(f,a ...)) ;
+                break ;
+            }else{
+                break ;
+            }
+        }
     }
     this.Log(level,msg) ;
 }
@@ -219,6 +247,8 @@ func ReplaceAttrSlogGoogleCloudLogging(groups []string, attr slog.Attr) (slog.At
 
 type TypeXWriterFuncOutput  func(opts ... any) ;
 
+type TypeXWriterFuncMiddleWareOutput    func(opts ... any)(any) ;
+
 type XWriter struct {
     Mode int ;
     Disable             bool ;
@@ -226,16 +256,38 @@ type XWriter struct {
     SyslogFacility      syslog.Priority ;
     SyslogLevel         syslog.Priority ;
     SyslogAddr          string ;
+
+    MiddleWareOutput    TypeXWriterFuncMiddleWareOutput ;
+    MiddleWareOutputs   []TypeXWriterFuncMiddleWareOutput ;
+
+    GoogleCloudLogging  XWriterOptionGoogleCloudLogging ;
+}
+
+func (this *XWriter) GetMode() int{
+    return this.Mode ;
 }
 
 func (this *XWriter) Setter(opts ... any) (*XWriter){
-    var def XWriter ;
 
     for _,opt := range opts{
-        def = opts[0].(XWriter) ; _ = opt ;
-        this.Disable = def.Disable ;
-        if(def.FuncOutput != nil){
-            this.FuncOutput = def.FuncOutput
+        t := fmt.Sprintf("%T",opt) ;
+        switch(t){
+            case "BerdyshFrameworkGoLang.XWriter":{
+                def := opt.(XWriter) ;
+                this.Disable = def.Disable ;
+                if(def.FuncOutput != nil){
+                    this.FuncOutput = def.FuncOutput
+                }
+                if(def.MiddleWareOutput != nil){
+                    this.MiddleWareOutputs = append(this.MiddleWareOutputs,def.MiddleWareOutput) ;
+                }
+            }
+            case "BerdyshFrameworkGoLang.XWriterOptionGoogleCloudLogging":{
+                this.GoogleCloudLogging = opt.(XWriterOptionGoogleCloudLogging) ;
+            }
+            default:{
+                fmt.Printf("Unknowns[%s]\n",t) ;
+            }
         }
     }
     return this ;
@@ -253,6 +305,7 @@ const (
 type IF_XWriter interface {
     io.Writer
     Setter(opts ... any) (*XWriter)
+    GetMode() int
 }
 
 func (this *XWriter) Write(p []byte) (n int, err error){
