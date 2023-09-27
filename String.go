@@ -3,7 +3,6 @@ package BerdyshFrameworkGoLang
 import (
     "strings"
     "strconv"
-    "fmt"
 )
 
 func Strtolower(src interface{}) (string){
@@ -20,7 +19,7 @@ func Strval(org interface{}) string{
     if(t == "[]uint8"){
         return string(org.([]uint8)) ;
     }else if(t != "string"){
-        fmt.Printf("TYPE[%s]\n",t) ;
+        printf("TYPE[%s]\n",t) ;
     }
 
     return org.(string) ;

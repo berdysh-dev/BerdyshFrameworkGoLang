@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
     "os"
     "net"
     "time"
@@ -69,7 +68,7 @@ func EvRecvSyslog(s string){
             case 7: Priority = "LOG_DEBUG" ;
         }
 
-        fmt.Printf("[%s][%s][%s][%s]\n",Facility,Priority,date,mess) ;
+        printf("[%s][%s][%s][%s]\n",Facility,Priority,date,mess) ;
     }
 }
 
@@ -84,22 +83,22 @@ func Syslogd(){
     unixAddr, err := net.ResolveUnixAddr("unix",SOCKET_LOG) ;
 
     if(err != nil){
-        fmt.Printf("err[%s]\n",err) ;
+        printf("err[%s]\n",err) ;
     }else{
         sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
         if(err != nil){
-            fmt.Printf("err[%s]\n",err) ;
+            printf("err[%s]\n",err) ;
         }else{
             for {
                 unixConn, err := sockListen.Accept() ;
                 if(err != nil){
-                    fmt.Printf("err[%s]\n",err) ;
+                    printf("err[%s]\n",err) ;
                 }else{
                     buf := make([]byte,4096) ;
                     var szRc int ; _ = szRc ;
                     szRc,err = unixConn.Read(buf) ;
                     if(err != nil){
-                        fmt.Printf("err[%s]\n",err) ;
+                        printf("err[%s]\n",err) ;
                     }else{
                         EvRecvSyslog(string(buf)) ;
                     }

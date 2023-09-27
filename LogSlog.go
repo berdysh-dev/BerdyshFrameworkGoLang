@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
     "strings"
     "net"
     "io"
@@ -19,7 +18,7 @@ func (this *LogWriter)  SetSyslogFacility(facility syslog.Priority){
 
 func (this *LogWriter) Write(p []byte) (n int, err error){
 
-    fmt.Printf("あああ\n") ;
+    printf("あああ\n") ;
 
     slogJson := NewAssoc() ;
     slogJson.LoadContents("application/json",p) ;
@@ -70,12 +69,12 @@ func (this *LogWriter) Write(p []byte) (n int, err error){
     if(true){
         conn, err := net.Dial("unix","/dev/log") ;
         if(err != nil){
-            fmt.Printf("err[%s]\n",err) ;
+            printf("err[%s]\n",err) ;
         }else{
             ar := strings.Split(message,"\n") ;
             for idx,line := range ar {
                 if((idx > 0) && (line == "")){ continue ; }
-                packet := fmt.Sprintf("<%d>Sep  4 09:09:02 : ",(facility + syslog_lv)) ;
+                packet := sprintf("<%d>Sep  4 09:09:02 : ",(facility + syslog_lv)) ;
                 packet = packet + line ;
                 rc , _ := conn.Write([]byte(packet)) ; _ = rc ;
             }

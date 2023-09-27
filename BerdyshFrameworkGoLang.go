@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
 )
 
 func Version() (string){
@@ -9,6 +8,6 @@ func Version() (string){
 }
 
 func Test(){
-    fmt.Printf("OK-4.\n") ;
+    printf("OK-4.\n") ;
 }
 

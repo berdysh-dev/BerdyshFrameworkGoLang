@@ -4,7 +4,6 @@ import (
     "bytes"
     "net/http"
     "io"
-    "fmt"
     "context"
 _   "strconv"
     "strings"
@@ -79,7 +78,7 @@ type TypeClientRes struct {
 
 func (rc *TypeClientRes) Init(cli *TypeClient) (*TypeClientRes){
     rc.Cli = cli ;
-    rc.Err = fmt.Errorf("TypeClientRes Not Init.") ;
+    rc.Err = errorf("TypeClientRes Not Init.") ;
     return rc ;
 }
 
@@ -104,7 +103,7 @@ func (this *TypeClient) SelfTest_0001() (error){
 //  url := this.Base + "/user/login" + "?" + params.EncodeCGI() ;
     url := this.Base + "/user/login" + "?" + params.EncodeCGI() ;
 
-    fmt.Printf("URL[%s]\n", url)
+    printf("URL[%s]\n", url)
 
     r, err := http.Get(url) ;
 
@@ -271,7 +270,7 @@ func (this *TypeClient) Do(opts ... interface{}){
     }
 
     if(url == ""){
-        rc.Err = fmt.Errorf("URL is nil") ;
+        rc.Err = errorf("URL is nil") ;
         return ;
     }
 
@@ -380,7 +379,7 @@ func (this *TypeClient) Do(opts ... interface{}){
             req.Header.Set("content-type",content_typeUPSTREAM) ;
         }
 
-//      req.Header.Set("content-length",fmt.Sprintf("%d",len(post_str))) ;
+//      req.Header.Set("content-length",sprintf("%d",len(post_str))) ;
 
         Debugf("KIND[%s][%s][%s]",KIND_UPSTREAM,content_typeUPSTREAM,post_str) ;
     }

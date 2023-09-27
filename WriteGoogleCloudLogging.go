@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
     "context"
     "runtime"
     "strings"
@@ -30,9 +29,9 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
     LogName     := this.GoogleCloudLogging.LogName ;
     ApiKey      := this.GoogleCloudLogging.ApiKey ;
 
-    formattedLogName := fmt.Sprintf("projects/%s/logs/%s",ProjectID,LogName) ;
+    formattedLogName := sprintf("projects/%s/logs/%s",ProjectID,LogName) ;
 
-    // fmt.Printf("!!![%s]",string(p)) ;
+    // printf("!!![%s]",string(p)) ;
 
     ctx := context.Background() ; _ = ctx ;
 
@@ -59,7 +58,7 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
         for i := jsrc.Iterator() ; i.HasNext(&kv) ;i.Next(){
             switch(kv.K.(string)){
                 case "severity":{
-                    // fmt.Printf("severity[%s]\n",kv.V.Raw.(string)) ;
+                    // printf("severity[%s]\n",kv.V.Raw.(string)) ;
                     switch(kv.V.Raw.(string)){
                         case "DEBUG"    :{ entry.Severity  = LogProtoBufType.LogSeverity_DEBUG      ; }
                         case "INFO"     :{ entry.Severity  = LogProtoBufType.LogSeverity_INFO       ; }
@@ -78,7 +77,7 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
         j , err := structpb.NewStruct(m) ;
 
         if(err != nil){
-            fmt.Printf("err[%s]\n",err) ;
+            printf("err[%s]\n",err) ;
             entry.Payload   = &LogProtoBufAPI.LogEntry_TextPayload{"ERROR"} ;
         }else{
             entry.Payload   = &LogProtoBufAPI.LogEntry_JsonPayload{JsonPayload: j } ;
@@ -114,10 +113,10 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
         req.Entries = append(req.Entries,&entry) ;
 
         if resp, err := cli.WriteLogEntries(ctx,&req) ; (err != nil){
-            fmt.Printf("err[%s]\n",err) ;
+            printf("err[%s]\n",err) ;
         }else{
             _ = resp ;
-            // fmt.Printf("resp.String[%s]\n",resp.String()) ;
+            // printf("resp.String[%s]\n",resp.String()) ;
         }
     }
 

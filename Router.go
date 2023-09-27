@@ -2,7 +2,6 @@ package BerdyshFrameworkGoLang
 
 import (
 _   "errors"
-    "fmt"
     "flag"
     "log"
     "log/syslog"
@@ -743,7 +742,7 @@ func LoaderOpenAPI(conf *TypeConfigOpenAPI) (*TypeRcLoaderOpenAPI,error){
             }
         }
 
-        fmt.Printf("%s\n",ret.defs.String()) ;
+        printf("%s\n",ret.defs.String()) ;
     }
 
     return &ret,nil ;

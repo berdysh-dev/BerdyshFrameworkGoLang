@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
     "io"
     "os"
     "log/slog"
@@ -83,11 +82,11 @@ func IsPathGOROOT(path string) bool{
 func (this *Logger) Logf(level slog.Level,f string,a ... any){
     var msg string ;
     mode := XWriterEnumNull ;
-    if(fmt.Sprintf("%T",this.Jh.w) == "*BerdyshFrameworkGoLang.XWriter"){
+    if(sprintf("%T",this.Jh.w) == "*BerdyshFrameworkGoLang.XWriter"){
         mode = this.Jh.w.(*XWriter).Mode ;
     }
     if(mode == XWriterEnumGoogleCloudLogging){
-        msg = fmt.Sprintf(f,a ...) ;
+        msg = sprintf(f,a ...) ;
     }else{
         dept := 1 ;
         for {
@@ -98,7 +97,7 @@ func (this *Logger) Logf(level slog.Level,f string,a ... any){
                 if((file == "WriteGoogleCloudLogging.go") || (file == "Logger.go") || IsPathGOROOT(fileFull)){
                     dept++ ; continue ;
                 }
-                msg = fmt.Sprintf("%04d:%s:%s",line,file,fmt.Sprintf(f,a ...)) ;
+                msg = sprintf("%04d:%s:%s",line,file,sprintf(f,a ...)) ;
                 break ;
             }else{
                 break ;
@@ -270,7 +269,7 @@ func (this *XWriter) GetMode() int{
 func (this *XWriter) Setter(opts ... any) (*XWriter){
 
     for _,opt := range opts{
-        t := fmt.Sprintf("%T",opt) ;
+        t := sprintf("%T",opt) ;
         switch(t){
             case "BerdyshFrameworkGoLang.XWriter":{
                 def := opt.(XWriter) ;
@@ -286,7 +285,7 @@ func (this *XWriter) Setter(opts ... any) (*XWriter){
                 this.GoogleCloudLogging = opt.(XWriterOptionGoogleCloudLogging) ;
             }
             default:{
-                fmt.Printf("Unknowns[%s]\n",t) ;
+                printf("Unknowns[%s]\n",t) ;
             }
         }
     }
@@ -315,22 +314,22 @@ func (this *XWriter) Write(p []byte) (n int, err error){
     }else{
         switch(this.Mode){
             case XWriterEnumStdout:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
             case XWriterEnumStderr:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
             case XWriterEnumSyslog:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
             case XWriterEnumHook:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
             case XWriterEnumGoogleCloudLogging:{
                 return this.WriteGoogleCloudLogging(p) ;
             }
             default:{
-                fmt.Printf("[%d]%s",this.Mode,string(p)) ;
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
         }
     }
@@ -351,7 +350,7 @@ func NewLogger(opts ... any) (*Logger){
     var jh *JSONHandler ;
 
     for _,opt := range opts{
-        switch(fmt.Sprintf("%T",opt)){
+        switch(sprintf("%T",opt)){
             case "*BerdyshFrameworkGoLang.JSONHandler":{
                 jh = opt.(*JSONHandler) ;
                 ret.Jh.w = jh.w ;
@@ -376,7 +375,7 @@ func NewLogger(opts ... any) (*Logger){
 
     if(true){
         jsonWriter.CallBack = func(severity string,message string){
-            fmt.Printf("severity[%s]/msg[%s]\n",severity,message) ;
+            printf("severity[%s]/msg[%s]\n",severity,message) ;
         } ;
     }
 

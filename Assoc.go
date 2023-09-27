@@ -1,7 +1,6 @@
 package BerdyshFrameworkGoLang
 
 import (
-    "fmt"
     "reflect"
     "strings"
     "bytes"
@@ -97,7 +96,7 @@ func (this *TypeAssoc) GetType(opts ... interface{}) string {
 }
 
 func (this *TypeAssoc) GetType2(t interface{}) (string,reflect.Kind) {
-    return fmt.Sprintf("%T",t),reflect.TypeOf(t).Kind() ;
+    return sprintf("%T",t),reflect.TypeOf(t).Kind() ;
 }
 
 func (this *TypeAssoc) conv_r (mode int,src interface{}) (interface{},error){
