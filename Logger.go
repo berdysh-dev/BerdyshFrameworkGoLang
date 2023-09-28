@@ -13,8 +13,8 @@ import (
     "go.uber.org/zap"
     "net"
     "time"
-    "regexp"
-    "strconv"
+_   "regexp"
+_   "strconv"
 _   "reflect"
 
 )
@@ -585,38 +585,47 @@ const (
     SOCKET_LOG  = "/dev/log"
 )
 
-type SyslogDaemonHandle interface {
-    EvRecv() ;
+type SyslogHandle interface {
+    EvRecv(facility syslog.Priority,level syslog.Priority,date string,mess string) ;
+    GetId() (string) ;
 }
 
-type SyslogDaemonEntry struct {
-    SyslogFacility      syslog.Priority ;
-    SyslogLevel         syslog.Priority ;
-    Handle              SyslogDaemonHandle ;
+type SyslogEntry struct {
+    Facility        syslog.Priority ;
+    Level           syslog.Priority ;
+    Handle          SyslogHandle ;
 }
 
 
-type SyslogDaemonRouter struct {
-    Entrys []SyslogDaemonEntry ;
+type SyslogRouter struct {
+    Err         error ;
+    Entrys      map[string]SyslogEntry ;
 }
 
-func (this *SyslogDaemonRouter) Init() (*SyslogDaemonRouter){
+func (this *SyslogRouter) Init() (*SyslogRouter){
 
-    this.Entrys = make([]SyslogDaemonEntry,0) ;
+    this.Entrys = make(map[string]SyslogEntry) ;
 
     return this ;
 }
 
-func (this *SyslogDaemonRouter) Handle(entry SyslogDaemonEntry,handle SyslogDaemonHandle) (*SyslogDaemonRouter){
+func (this *SyslogRouter) Handle(entry SyslogEntry,handle SyslogHandle) (*SyslogRouter){
+
+    id := handle.GetId()
 
     entry.Handle = handle ;
-    this.Entrys = append(this.Entrys,entry) ;
+
+    if _, ok := this.Entrys[id]; ok {
+        this.Err = errorf("Id [%s] exists",id) ;
+    }else{
+        this.Entrys[id] = entry ;
+    }
 
     return this ;
 }
 
-func NewSyslogDaemonRouter() (*SyslogDaemonRouter){
-    ret := SyslogDaemonRouter{} ;
+func NewSyslogRouter() (*SyslogRouter){
+    ret := SyslogRouter{} ;
     return ret.Init() ;
 }
 
@@ -627,7 +636,47 @@ func Tick(){
     }
 }
 
-func EvRecvSyslog(router *SyslogDaemonRouter,s string){
+func SyslogRouting(router *SyslogRouter,pri int,facility syslog.Priority,level syslog.Priority,date string,mess string){
+
+//  printf("PRI[0x%x]/[0x%x][0x%x][%s]\n",pri,facility,level,mess) ;
+
+    maxScore := -1 ;
+
+    var entry SyslogEntry ;
+    var last  SyslogEntry ;
+
+    count := 0 ;
+    for _,e := range router.Entrys{
+        score := 0 ;
+
+        if(e.Facility == facility){
+            if(e.Level == level){
+                score += 1 ;
+            }else{
+                score += 2 ;
+            }
+        }
+
+        if(score > 0){
+            if(maxScore < score){
+                maxScore = score ;
+                entry = e ;
+            }
+        }
+        count++ ;
+        last = e ;
+    }
+
+    if(maxScore > 0){
+        entry.Handle.EvRecv(facility,level,date,mess) ;
+    }else if((count == 1) && (last.Facility == 0) && (last.Level == 0)){
+        last.Handle.EvRecv(facility,level,date,mess) ;
+    }else{
+        printf("該当なし[%d].\n",count) ;
+    }
+}
+
+func EvRecvSyslog(router *SyslogRouter,str string){
 
     var Facility string ; _ = Facility ;
     var Priority string ; _ = Priority ;
@@ -635,14 +684,24 @@ func EvRecvSyslog(router *SyslogDaemonRouter,s string){
     var facility    syslog.Priority = -1 ; _ = facility ;
     var priority    syslog.Priority = -1 ; _ = priority ;
 
-    r := regexp.MustCompile(`^\<(\d+)\>(.* \d\d:\d\d:\d\d)\s*:\s+(.*)$`)
+    printf("mess[%s].\n",Trim(str)) ;
 
-    tmp := r.FindAllStringSubmatch(s,-1)
-    if(len(tmp) == 1){
+/*
+
+//  r := regexp.MustCompile(`^\<(\d+)\>(.* \d\d:\d\d:\d\d)\s*[^\:]*:\s+(.*)$`)
+//  r := regexp.MustCompile(`^\<(\d+)\>(.*\d\d:\d\d:\d\d)(.*)$`)
+//  r := regexp.MustCompile(`^(.*)$`)
+//  tmp := r.FindAllStringSubmatch(str,-1)
+//  if(len(tmp) != 1){
+
+
+    if(true){
+        printf("不一致/mess[%s].\n",str) ;
+    }else{
         matches := tmp[0] ;
         pri,_  := strconv.Atoi(matches[1]) ;  _ = pri ;
-        date := matches[2] ; _ = date ;
-        mess := matches[3] ; _ = mess ;
+        date := Trim(matches[2]) ; _ = date ;
+        mess := Trim(matches[3]) ; _ = mess ;
 
         facilityN := pri / 8 ; _ = Facility ;
         priorityN := pri % 8 ; _ = Priority ;
@@ -765,11 +824,12 @@ func EvRecvSyslog(router *SyslogDaemonRouter,s string){
             }
         }
 
-        printf("[%s][%s][%s][%s]\n",Facility,Priority,date,mess) ;
+        SyslogRouting(router,pri,facility,priority,date,mess) ;
     }
+*/
 }
 
-func SyslogDaemonNode(addrListen string,router *SyslogDaemonRouter){
+func SyslogDaemonNode(addrListen string,router *SyslogRouter){
     netDial := "unix" ; _ = netDial ;
     addrDial := "/dev/log" ; _ = addrDial ;
 
@@ -803,19 +863,18 @@ func SyslogDaemonNode(addrListen string,router *SyslogDaemonRouter){
         if(err != nil){
             printf("err-10[%s]\n",err) ;
         }else{
-            printf("ok[%s]\n",addrDial) ;
+            // printf("ok[%s]\n",addrDial) ;
             for{
                 unixConn, err := sockListen.Accept() ;
+                defer unixConn.Close() ;
                 if(err != nil){
                     printf("err-11[%s]\n",err) ;
                 }else{
                     buf := make([]byte,4096) ;
                     var szRc int ; _ = szRc ;
                     szRc,err = unixConn.Read(buf) ;
-                    if(err != nil){
-                        printf("err-12[%s]\n",err) ;
-                    }else{
-                        EvRecvSyslog(router,string(buf)) ;
+                    if(err == nil){
+                        EvRecvSyslog(router,Trim(string(buf))) ;
                     }
                 }
             }
@@ -825,7 +884,7 @@ func SyslogDaemonNode(addrListen string,router *SyslogDaemonRouter){
 
 func SyslogDaemon(opts ... any) (error){
 
-    var router *SyslogDaemonRouter = nil ;
+    var router *SyslogRouter = nil ;
 
     addrListens := make([]string,0) ;
 
@@ -833,8 +892,8 @@ func SyslogDaemon(opts ... any) (error){
         t := sprintf("%T",opt) ;
 
         switch(t){
-            case "*BerdyshFrameworkGoLang.SyslogDaemonRouter":{
-                router = opt.(*SyslogDaemonRouter)
+            case "*BerdyshFrameworkGoLang.SyslogRouter":{
+                router = opt.(*SyslogRouter)
             }
             case "string":{
                 addrListens = append(addrListens,opt.(string)) ;
@@ -847,10 +906,10 @@ func SyslogDaemon(opts ... any) (error){
     }
 
     for _,addrListen := range addrListens{
-        SyslogDaemonNode(addrListen,router) ;
+        go SyslogDaemonNode(addrListen,router) ;
     }
 
-    // time.Sleep(1 * time.Second) ;
+    time.Sleep(1 * time.Second) ;
 
     return nil ;
 }
