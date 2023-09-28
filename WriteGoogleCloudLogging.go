@@ -29,21 +29,25 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
     LogName     := this.GoogleCloudLogging.LogName ;
     ApiKey      := this.GoogleCloudLogging.ApiKey ;
 
-    formattedLogName := sprintf("projects/%s/logs/%s",ProjectID,LogName) ;
-
-    c := Substr(ApiKey,0,1) ;
-    if(c != "{"){ ApiKey,_ = File_get_contents(ApiKey) ; }
-
-    printf_("key[%s][%s]!!!!!!!!!!!!\n",ApiKey,c) ;
-    printf_("json[%s]\n",string(p)) ;
-
     ctx := context.Background() ; _ = ctx ;
 
-    opt := OptionApiGCP.WithCredentialsJSON([]byte(ApiKey)) ; _ = opt ;
+    formattedLogName := sprintf("projects/%s/logs/%s",ProjectID,LogName) ;
 
-    cli , e = CloudLoggingV2.NewClient(ctx,opt) ;
+    if(ApiKey != ""){
+        c := Substr(ApiKey,0,1) ;
+        if(c != "{"){ ApiKey,_ = File_get_contents(ApiKey) ; }
+        printf("key[%s][%s]!!!!!!!!!!!!\n",ApiKey,c) ;
 
-    if(e == nil){
+        opt := OptionApiGCP.WithCredentialsJSON([]byte(ApiKey)) ; _ = opt ;
+        cli , e = CloudLoggingV2.NewClient(ctx,opt) ;
+    }else{
+        cli , e = CloudLoggingV2.NewClient(ctx) ;
+    }
+
+    if(e != nil){
+        printf("err-1[%s]\n",e) ;
+        return 0,err ;
+    }else{
         defer cli.Close()
         req := LogProtoBufAPI.WriteLogEntriesRequest{} ;
 
@@ -82,7 +86,7 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
         // (x *Struct) UnmarshalJSON(b []byte) error
 
         if(err != nil){
-            printf("err[%s]\n",err) ;
+            printf("err-2[%s]\n",err) ;
             entry.Payload   = &LogProtoBufAPI.LogEntry_TextPayload{TextPayload: string(p) } ;
         }else{
             entry.Payload   = &LogProtoBufAPI.LogEntry_JsonPayload{JsonPayload: jsonPayload } ;
@@ -118,10 +122,11 @@ func (this *XWriter) WriteGoogleCloudLogging(p []byte) (n int, err error){
         req.Entries = append(req.Entries,&entry) ;
 
         if resp, err := cli.WriteLogEntries(ctx,&req) ; (err != nil){
-            printf("err[%s]\n",err) ;
+            printf("err-3[%s]\n",err) ;
+            return 0,err ;
         }else{
             _ = resp ;
-            // printf("resp.String[%s]\n",resp.String()) ;
+            printf("resp.String[%s]\n",resp.String()) ;
         }
     }
 

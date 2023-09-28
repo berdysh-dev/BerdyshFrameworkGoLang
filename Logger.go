@@ -3,12 +3,20 @@ package BerdyshFrameworkGoLang
 import (
     "io"
     "os"
+    "log"
     "log/slog"
     "log/syslog"
+    "net/url"
     "runtime"
     "strings"
     "context"
+    "go.uber.org/zap"
+    "net"
+    "time"
+    "regexp"
+    "strconv"
 _   "reflect"
+
 )
 
 type Level int ;
@@ -322,6 +330,14 @@ func (this *XWriter) Setter(opts ... any) (*XWriter){
                 if(def.MiddleWareOutput != nil){
                     this.MiddleWareOutputs = append(this.MiddleWareOutputs,def.MiddleWareOutput) ;
                 }
+
+                if(def.SyslogAddr != ""){
+                    this.SyslogAddr = def.SyslogAddr
+                }
+
+                this.SyslogFacility = def.SyslogFacility ;
+                this.SyslogLevel = def.SyslogLevel ;
+
             }
             case "BerdyshFrameworkGoLang.XWriterOptionGoogleCloudLogging":{
                 this.GoogleCloudLogging = opt.(XWriterOptionGoogleCloudLogging) ;
@@ -339,14 +355,64 @@ const (
     XWriterEnumStdout
     XWriterEnumStderr
     XWriterEnumSyslog
+    XWriterEnumStdLog
     XWriterEnumHook
     XWriterEnumGoogleCloudLogging
+    XWriterEnumTest
+    XWriterEnumTest2
+    XWriterEnumTest3
 )
 
 type IF_XWriter interface {
     io.Writer
     Setter(opts ... any) (*XWriter)
     GetMode() int
+}
+
+func getBytes(str string) ([]byte){
+    return []byte(str) ;
+}
+
+func (this *XWriter) lineSyslog(line string){
+
+    network := "unix" ;
+    addr := "/dev/log" ;
+
+    if(this.SyslogAddr != ""){
+        ui , err := url.Parse(this.SyslogAddr) ; _ = ui ;
+        if(err != nil){
+            printf("err-1[%s]\n",err) ;
+        }else{
+            switch(ui.Scheme){
+                case "unix":{
+                    network = "unix" ;
+                    addr = ui.Path ;
+                }
+            }
+        }
+    }
+
+    sysLog, err := syslog.Dial(network, addr,this.SyslogFacility|this.SyslogLevel,"") ;
+
+    if(err != nil){
+        printf("err-2[%s]\n",err) ;
+    }else{
+        defer sysLog.Close() ;
+        sysLog.Write(getBytes(line)) ;
+    }
+}
+
+func (this *XWriter) WriteSub(p []byte) (n int, err error){
+
+    lines := strings.Split(string(p),"\n") ;
+
+    for _,line := range lines{
+        if(line != ""){
+            this.lineSyslog(line) ;
+        }
+    }
+
+    return n,nil ;
 }
 
 func (this *XWriter) Write(p []byte) (n int, err error){
@@ -364,11 +430,23 @@ func (this *XWriter) Write(p []byte) (n int, err error){
             case XWriterEnumSyslog:{
                 printf("[%d]%s",this.Mode,string(p)) ;
             }
+            case XWriterEnumStdLog:{
+                return this.WriteSub(p) ;
+            }
             case XWriterEnumHook:{
                 printf("[%d]%s",this.Mode,string(p)) ;
             }
             case XWriterEnumGoogleCloudLogging:{
                 return this.WriteGoogleCloudLogging(p) ;
+            }
+            case XWriterEnumTest:{
+                printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumTest2:{
+                printf("[%d]%s",this.Mode,string(p)) ;
+            }
+            case XWriterEnumTest3:{
+                printf("[%d]%s",this.Mode,string(p)) ;
             }
             default:{
                 printf("[%d]%s",this.Mode,string(p)) ;
@@ -381,8 +459,12 @@ func (this *XWriter) Write(p []byte) (n int, err error){
 var XWriterStdout               IF_XWriter = &XWriter{Mode: XWriterEnumStdout} ;
 var XWriterStderr               IF_XWriter = &XWriter{Mode: XWriterEnumStderr} ;
 var XWriterSyslog               IF_XWriter = &XWriter{Mode: XWriterEnumSyslog} ;
+var XWriterStdLog               IF_XWriter = &XWriter{Mode: XWriterEnumStdLog} ;
 var XWriterHook                 IF_XWriter = &XWriter{Mode: XWriterEnumHook} ;
 var XWriterGoogleCloudLogging   IF_XWriter = &XWriter{Mode: XWriterEnumGoogleCloudLogging} ;
+var XWriterTest                 IF_XWriter = &XWriter{Mode: XWriterEnumTest} ;
+var XWriterTest2                IF_XWriter = &XWriter{Mode: XWriterEnumTest2} ;
+var XWriterTest3                IF_XWriter = &XWriter{Mode: XWriterEnumTest3} ;
 
 func NewLogger(opts ... any) (*Logger){
 
@@ -428,43 +510,350 @@ func NewLogger(opts ... any) (*Logger){
     return ret ;
 }
 
+type MySlogHandler struct {
+}
+
+func (this *MySlogHandler) Enabled(context.Context, slog.Level) bool{
+
+    printf("Enabled.\n") ;
+
+    return false ;
+}
+
+func (this *MySlogHandler) Handle(context.Context, slog.Record) error{
+    printf("Handle.\n") ;
+    return nil ;
+}
+
+func (this *MySlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler{
+    printf("WithAttrs.\n") ;
+    return this ;
+}
+
+func (this *MySlogHandler) WithGroup(name string) slog.Handler{
+    printf("WithGroup.\n") ;
+    return this ;
+}
+
+func TestSlog(){
+
+    var handler slog.Handler = &MySlogHandler{} ;
+    var oldLogger *log.Logger ;
+
+    oldLogger = slog.NewLogLogger(handler,slog.LevelInfo) ; _ = oldLogger ;
+
+//    logger.Debug("XXX") ;
+
+}
+
+func TestLogStd(){
+    var oldLogger *log.Logger ; _ = oldLogger ;
+
+    if(true){
+        oldLogger = log.Default() ;
+    }else{
+        oldLogger = log.New(XWriterTest,"prefix" ,0) ;
+    }
+
+    w := oldLogger.Writer() ;
+
+    if(sprintf("%T",w) == "*os.File"){
+    }
+
+    oldLogger.SetOutput(XWriterStdLog) ;
+    oldLogger.SetPrefix("") ;
+    oldLogger.SetFlags(0) ;
+
+    log.Printf("XXX\n") ;
+
+}
+
+func TestLogZap(){
+    logger, err := zap.NewDevelopment()
+
+    if(err != nil){
+        printf("err-3[%s]\n",err) ;
+    }else{
+        defer logger.Sync() ;
+        var cfg zap.Config ;
+        printf("type[%T]\n",cfg) ;
+    }
+
+}
+
+const (
+    SOCKET_LOG  = "/dev/log"
+)
+
+type SyslogDaemonHandle interface {
+    EvRecv() ;
+}
+
+type SyslogDaemonEntry struct {
+    SyslogFacility      syslog.Priority ;
+    SyslogLevel         syslog.Priority ;
+    Handle              SyslogDaemonHandle ;
+}
 
 
+type SyslogDaemonRouter struct {
+    Entrys []SyslogDaemonEntry ;
+}
 
+func (this *SyslogDaemonRouter) Init() (*SyslogDaemonRouter){
 
+    this.Entrys = make([]SyslogDaemonEntry,0) ;
 
+    return this ;
+}
 
+func (this *SyslogDaemonRouter) Handle(entry SyslogDaemonEntry,handle SyslogDaemonHandle) (*SyslogDaemonRouter){
 
+    entry.Handle = handle ;
+    this.Entrys = append(this.Entrys,entry) ;
 
+    return this ;
+}
 
+func NewSyslogDaemonRouter() (*SyslogDaemonRouter){
+    ret := SyslogDaemonRouter{} ;
+    return ret.Init() ;
+}
 
+func Tick(){
+    for lp:=1;;lp+=1 {
+        time.Sleep(1 * time.Second) ;
+        Debugf("Syslogd[%06d].",lp) ;
+    }
+}
 
+func EvRecvSyslog(router *SyslogDaemonRouter,s string){
 
+    var Facility string ; _ = Facility ;
+    var Priority string ; _ = Priority ;
 
+    var facility    syslog.Priority = -1 ; _ = facility ;
+    var priority    syslog.Priority = -1 ; _ = priority ;
 
+    r := regexp.MustCompile(`^\<(\d+)\>(.* \d\d:\d\d:\d\d)\s*:\s+(.*)$`)
 
+    tmp := r.FindAllStringSubmatch(s,-1)
+    if(len(tmp) == 1){
+        matches := tmp[0] ;
+        pri,_  := strconv.Atoi(matches[1]) ;  _ = pri ;
+        date := matches[2] ; _ = date ;
+        mess := matches[3] ; _ = mess ;
 
+        facilityN := pri / 8 ; _ = Facility ;
+        priorityN := pri % 8 ; _ = Priority ;
 
+        switch(facilityN){
+            case 0:{
+                Facility = "LOG_KERN" ;
+                facility = syslog.LOG_KERN ;
+            }
+            case 1:{
+                Facility = "LOG_USER" ;
+                facility = syslog.LOG_USER ;
+            }
+            case 2:{
+                Facility = "LOG_MAIL" ;
+                facility = syslog.LOG_MAIL ;
+            }
+            case 3:{
+                Facility = "LOG_DAEMON" ;
+                facility = syslog.LOG_DAEMON ;
+            }
+            case 4:{
+                Facility = "LOG_AUTH" ;
+                facility = syslog.LOG_AUTH ;
+            }
+            case 5:{
+                Facility = "LOG_SYSLOG" ;
+                facility = syslog.LOG_SYSLOG ;
+            }
+            case 6:{
+                Facility = "LOG_LPR" ;
+                facility = syslog.LOG_LPR ;
+            }
+            case 7:{
+                Facility = "LOG_NEWS" ;
+                facility = syslog.LOG_NEWS ;
+            }
+            case 8:{
+                Facility = "LOG_UUCP" ;
+                facility = syslog.LOG_UUCP ;
+            }
+            case 9:{
+                Facility = "LOG_CRON" ;
+                facility = syslog.LOG_CRON ;
+            }
+            case 10:{
+                Facility = "LOG_AUTHPRIV" ;
+                facility = syslog.LOG_AUTHPRIV ;
+            }
+            case 11:{
+                Facility = "LOG_FTP" ;
+                facility = syslog.LOG_FTP ;
+            }
+            case 16:{
+                Facility = "LOG_LOCAL0" ;
+                facility = syslog.LOG_LOCAL0 ;
+            }
+            case 17:{
+                Facility = "LOG_LOCAL1" ;
+                facility = syslog.LOG_LOCAL1 ;
+            }
+            case 18:{
+                Facility = "LOG_LOCAL2" ;
+                facility = syslog.LOG_LOCAL2 ;
+            }
+            case 19:{
+                Facility = "LOG_LOCAL3" ;
+                facility = syslog.LOG_LOCAL3 ;
+            }
+            case 20:{
+                Facility = "LOG_LOCAL4" ;
+                facility = syslog.LOG_LOCAL4 ;
+            }
+            case 21:{
+                Facility = "LOG_LOCAL5" ;
+                facility = syslog.LOG_LOCAL5 ;
+            }
+            case 22:{
+                Facility = "LOG_LOCAL6" ;
+                facility = syslog.LOG_LOCAL6 ;
+            }
+            case 23:{
+                Facility = "LOG_LOCAL7" ;
+                facility = syslog.LOG_LOCAL7 ;
+            }
+        }
 
+        switch(priorityN){
+            case 0:{
+                Priority = "LOG_EMERG" ;
+                priority = syslog.LOG_EMERG ;
+            }
+            case 1:{
+                Priority = "LOG_ALERT" ;
+                priority = syslog.LOG_ALERT ;
+            }
+            case 2:{
+                Priority = "LOG_CRIT" ;
+                priority = syslog.LOG_CRIT ;
+            }
+            case 3:{
+                Priority = "LOG_ERR" ;
+                priority = syslog.LOG_ERR ;
+            }
+            case 4:{
+                Priority = "LOG_WARNING" ;
+                priority = syslog.LOG_WARNING ;
+            }
+            case 5:{
+                Priority = "LOG_NOTICE" ;
+                priority = syslog.LOG_NOTICE ;
+            }
+            case 6:{
+                Priority = "LOG_INFO" ;
+                priority = syslog.LOG_INFO ;
+            }
+            case 7:{
+                Priority = "LOG_DEBUG" ;
+                priority = syslog.LOG_DEBUG ;
+            }
+        }
 
+        printf("[%s][%s][%s][%s]\n",Facility,Priority,date,mess) ;
+    }
+}
 
+func SyslogDaemonNode(addrListen string,router *SyslogDaemonRouter){
+    netDial := "unix" ; _ = netDial ;
+    addrDial := "/dev/log" ; _ = addrDial ;
 
+    if(addrListen != ""){
+        if ui , err := url.Parse(addrListen) ; (err != nil){
+            printf("err-8[%s]\n",err) ;
+        }else{
+            switch(ui.Scheme){
+                case "unix":{
+                    netDial = "unix" ;
+                    addrDial = ui.Path ;
+                }
+            }
+        }
+    }
 
+    if(netDial == "unix"){
+        if _ , err := os.Stat(addrDial) ; (err == nil){
+            if(addrDial == "/dev/log"){
+                os.Remove(addrDial) ;
+            }
+        }
+    }
 
+    unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
 
+    if(err != nil){
+        printf("err-9[%s]\n",err) ;
+    }else{
+        sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
+        if(err != nil){
+            printf("err-10[%s]\n",err) ;
+        }else{
+            printf("ok[%s]\n",addrDial) ;
+            for{
+                unixConn, err := sockListen.Accept() ;
+                if(err != nil){
+                    printf("err-11[%s]\n",err) ;
+                }else{
+                    buf := make([]byte,4096) ;
+                    var szRc int ; _ = szRc ;
+                    szRc,err = unixConn.Read(buf) ;
+                    if(err != nil){
+                        printf("err-12[%s]\n",err) ;
+                    }else{
+                        EvRecvSyslog(router,string(buf)) ;
+                    }
+                }
+            }
+        }
+    }
+}
 
+func SyslogDaemon(opts ... any) (error){
 
+    var router *SyslogDaemonRouter = nil ;
 
+    addrListens := make([]string,0) ;
 
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
 
+        switch(t){
+            case "*BerdyshFrameworkGoLang.SyslogDaemonRouter":{
+                router = opt.(*SyslogDaemonRouter)
+            }
+            case "string":{
+                addrListens = append(addrListens,opt.(string)) ;
+            }
+        }
+    }
 
+    if(len(addrListens) == 0){
+        addrListens = append(addrListens,"unix:///dev/log") ;
+    }
 
+    for _,addrListen := range addrListens{
+        SyslogDaemonNode(addrListen,router) ;
+    }
 
+    // time.Sleep(1 * time.Second) ;
 
-
-
-
-
+    return nil ;
+}
 
 
 

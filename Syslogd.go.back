@@ -6,11 +6,48 @@ import (
     "time"
     "regexp"
     "strconv"
+    "log/syslog"
 )
 
 const (
     SOCKET_LOG  = "/dev/log"
 )
+
+type SyslogDaemonHandle interface {
+    EvRecv() ;
+}
+
+type SyslogDaemonEntry struct {
+    SyslogFacility      syslog.Priority ;
+    SyslogLevel         syslog.Priority ;
+    Handle              SyslogDaemonHandle ;
+}
+
+
+type SyslogDaemonRouter struct {
+    Entrys []SyslogDaemonEntry ;
+}
+
+func (this *SyslogDaemonRouter) Init() (*SyslogDaemonRouter){
+
+    this.Entrys = make([]SyslogDaemonEntry,0) ;
+
+    return this ;
+}
+
+
+func (this *SyslogDaemonRouter) Handle(entry SyslogDaemonEntry,handle SyslogDaemonHandle) (*SyslogDaemonRouter){
+
+    entry.Handle = handle ;
+    this.Entrys = append(this.Entrys,entry) ;
+
+    return this ;
+}
+
+func NewSyslogDaemonRouter() (*SyslogDaemonRouter){
+    ret := SyslogDaemonRouter{} ;
+    return ret.Init() ;
+}
 
 func Tick(){
     for lp:=1;;lp+=1 {
@@ -108,6 +145,9 @@ func Syslogd(){
     }
 }
 
+func SyslogDaemon(addr string,router *SyslogDaemonRouter) (error){
+    return nil ;
+}
 
 
 
