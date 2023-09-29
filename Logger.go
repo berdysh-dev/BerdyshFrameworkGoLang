@@ -734,7 +734,15 @@ type SyslogProtocol struct {
 
     Timestamp   string ;
     Tag         string ;
+    AppName     string ;
+    Hostname    string ;
+    Msgid       string ;
     Pid         int ;
+    Version     int ;
+
+    IsRFC3164   bool ;
+    IsRFC5424   bool ;
+    IsRFC6587   bool ;
 
     Message     string ;
 }
