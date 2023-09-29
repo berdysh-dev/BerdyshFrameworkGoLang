@@ -818,29 +818,30 @@ func parseSyslogProtocol(str string) (SyslogProtocol,error){
 
         allMatches = reg_01.FindAllStringSubmatch(Trim(tmp),-1)
         if(len(allMatches) == 1){
-            for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+            // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
 
             head        = allMatches[0][0] ;
             timestamp   = allMatches[0][1] ;
             tag         = allMatches[0][2] ;
             pid         = allMatches[0][3] ;
 
-            printf("A[%s]\n",head) ;
+            // printf("A[%s]\n",head) ;
         }else{
             allMatches := reg_02.FindAllStringSubmatch(Trim(tmp),-1)
             if(len(allMatches) == 1){
-                for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+                // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
                 head      = allMatches[0][0] ;
                 timestamp = allMatches[0][1] ;
                 tag       = allMatches[0][2] ;
-                printf("B[%s]\n",head) ;
+                // printf("B[%s]\n",head) ;
             }else{
                 allMatches := reg_03.FindAllStringSubmatch(Trim(tmp),-1)
                 if(len(allMatches) == 1){
-                    for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+                    // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+
                     head      = allMatches[0][0] ;
                     timestamp = allMatches[0][1] ;
-                    printf("C[%s]\n",head) ;
+                    // printf("C[%s]\n",head) ;
                 }
             }
         }
@@ -870,6 +871,9 @@ func parseSyslogProtocol(str string) (SyslogProtocol,error){
 }
 
 func EvRecvSyslog(router *SyslogRouter,str string){
+
+    printf("[%s]\n",str) ;
+
     rc,err := parseSyslogProtocol(str) ;
     if(err != nil){
         print("err[%s]\n",err) ;
@@ -918,20 +922,22 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
         }else{
             for{
                 unixConn, err := sockListen.Accept() ;
-                defer unixConn.Close() ;
                 if(err != nil){
                     return err ;
                 }else{
+                    defer unixConn.Close() ;
                     buf := make([]byte,0x1000) ;
                     var szRc int ;
-                    szRc,err = unixConn.Read(buf) ;
-                    if(err == nil){
-                        EvRecvSyslog(router,string(buf[:szRc])) ;
-                        if(router.Err != nil){
-                            return router.Err
+                    var fifo string ;
+                    for {
+                        szRc,err = unixConn.Read(buf) ;
+                        if(err == nil){
+                            fifo = fifo + string(buf[:szRc]) ;
+
+                            printf("%s\n",fifo);
+                        }else{
+                            return err ;
                         }
-                    }else{
-                        return err ;
                     }
                 }
             }
@@ -963,12 +969,11 @@ func SyslogDaemon(opts ... any) (error){
     }
 
     for _,addrListen := range addrListens{
-        go func(){
-            SyslogDaemonNode(addrListen,router) ;
-        }() ;
+        // go func(){}() ;
+        SyslogDaemonNode(addrListen,router) ;
     }
 
-    time.Sleep(1 * time.Second) ;
+    /// time.Sleep(1 * time.Second) ;
 
     return nil ;
 }
