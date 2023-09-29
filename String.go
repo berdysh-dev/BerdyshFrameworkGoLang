@@ -80,21 +80,21 @@ func IsString(src any) (bool,string) {
 }
 
 func Substr(args ... interface{}) string{
-    ret := "" ;
-    str := "" ;
-    st := 0 ;
-    offset := 0 ;
-    length := 0 ;
+    ret := "" ; _ = ret ;
+    str := "" ; _ = str ;
+    st := 0 ; _ = st ;
+    offset := 0 ; _ = offset ;
+    length := 0 ; _ = length ;
 
-    is_length := 0 ;
+    is_length := false ; _ = is_length ;
 
-    num_args := len(args) ;
+    num_args := len(args) ; _ = num_args ;
 
     if(num_args < 1){ return "" ; }
 
     str = Strval(args[0]) ;
     str_len := len(str) ;
-    bin := []byte(str)
+    bin := []byte(str) ; _ = bin ;
 
     switch(num_args){
     case 2:{
@@ -105,7 +105,7 @@ func Substr(args ... interface{}) string{
             str = Strval(args[0]) ;
             offset = Intval(args[1]) ;
             length = Intval(args[2]) ;
-            is_length = 1 ;
+            is_length = true ;
         }
     }
 
@@ -116,19 +116,10 @@ func Substr(args ... interface{}) string{
         st = offset ;
     }
 
-    idx := st ;
-    cnt := 0 ;
-    for(idx < str_len){
-        ret += Chr(bin[idx]) ;
-        idx += 1 ;
-        cnt += 1 ;
-        if(is_length != 0){
-            if(cnt >= length){ break ; }
-        }
+    if(is_length){
+        return string([]rune(str)[offset:(offset+length)]) ;
+    }else{
+        return string([]rune(str)[offset:]) ;
     }
-
-    _ = str ; _ = offset ; _ = length ; _ = is_length ;
-
-    return ret ;
 }
 

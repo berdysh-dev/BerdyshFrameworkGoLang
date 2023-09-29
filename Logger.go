@@ -8,12 +8,13 @@ import (
     "log/syslog"
     "net/url"
     "runtime"
+    "strconv"
     "strings"
     "context"
     "go.uber.org/zap"
     "net"
     "time"
-_   "regexp"
+    "regexp"
 _   "strconv"
 _   "reflect"
 
@@ -392,6 +393,8 @@ func (this *XWriter) lineSyslog(line string){
         }
     }
 
+    // printf("\n%s\n",Hexdump(line)) ;
+
     sysLog, err := syslog.Dial(network, addr,this.SyslogFacility|this.SyslogLevel,"") ;
 
     if(err != nil){
@@ -611,14 +614,18 @@ func (this *SyslogRouter) Init() (*SyslogRouter){
 
 func (this *SyslogRouter) Handle(entry SyslogEntry,handle SyslogHandle) (*SyslogRouter){
 
-    id := handle.GetId()
-
     entry.Handle = handle ;
 
-    if _, ok := this.Entrys[id]; ok {
-        this.Err = errorf("Id [%s] exists",id) ;
+    id := handle.GetId()
+
+    if(id == ""){
+        this.Err = errorf("Id [%s] is empty.",id) ;
     }else{
-        this.Entrys[id] = entry ;
+        if _, ok := this.Entrys[id]; ok {
+            this.Err = errorf("Id [%s] exists",id) ;
+        }else{
+            this.Entrys[id] = entry ;
+        }
     }
 
     return this ;
@@ -636,21 +643,23 @@ func Tick(){
     }
 }
 
-func SyslogRouting(router *SyslogRouter,pri int,facility syslog.Priority,level syslog.Priority,date string,mess string){
+func SyslogRouting(router *SyslogRouter,rc SyslogProtocol){
 
-//  printf("PRI[0x%x]/[0x%x][0x%x][%s]\n",pri,facility,level,mess) ;
+    // printf("[%d]/[0x%x]/[0x%x]/[%s]/[%s]\n",rc.Pri,rc.Facility,rc.Priority,rc.Timestamp,Trim(rc.Message)) ;
 
     maxScore := -1 ;
 
-    var entry SyslogEntry ;
-    var last  SyslogEntry ;
+    IsFind := false ;
+
+    var entry SyslogEntry ; _ = entry ;
+    var last  SyslogEntry ; _ = last ;
 
     count := 0 ;
     for _,e := range router.Entrys{
         score := 0 ;
 
-        if(e.Facility == facility){
-            if(e.Level == level){
+        if(e.Facility == rc.Facility){
+            if(e.Level == rc.Priority){
                 score += 1 ;
             }else{
                 score += 2 ;
@@ -661,181 +670,225 @@ func SyslogRouting(router *SyslogRouter,pri int,facility syslog.Priority,level s
             if(maxScore < score){
                 maxScore = score ;
                 entry = e ;
+                IsFind = true ;
             }
         }
         count++ ;
         last = e ;
     }
 
-    if(maxScore > 0){
-        entry.Handle.EvRecv(facility,level,date,mess) ;
-    }else if((count == 1) && (last.Facility == 0) && (last.Level == 0)){
-        last.Handle.EvRecv(facility,level,date,mess) ;
+    if((IsFind == false) && (count == 1) && (last.Facility == 0) && (last.Level == 0)){
+        entry = last ;
+        IsFind = true ;
+    }
+
+    if(IsFind){
+        entry.Handle.EvRecv(rc.Facility,rc.Priority,rc.Timestamp,rc.Message) ;
     }else{
-        printf("該当なし[%d].\n",count) ;
+        printf("NotFound[%d].\n",count) ;
     }
 }
 
-func EvRecvSyslog(router *SyslogRouter,str string){
+func Hexdump(x any) (string){
+    data := []byte(x.(string)) ;
 
-    var Facility string ; _ = Facility ;
-    var Priority string ; _ = Priority ;
+    len := len(data) ;
 
-    var facility    syslog.Priority = -1 ; _ = facility ;
-    var priority    syslog.Priority = -1 ; _ = priority ;
+    ascii := "" ;
 
-    printf("mess[%s].\n",Trim(str)) ;
+    var iii int ;
 
-/*
+    text := sprintf("%04x: ",0) ;
 
-//  r := regexp.MustCompile(`^\<(\d+)\>(.* \d\d:\d\d:\d\d)\s*[^\:]*:\s+(.*)$`)
-//  r := regexp.MustCompile(`^\<(\d+)\>(.*\d\d:\d\d:\d\d)(.*)$`)
-//  r := regexp.MustCompile(`^(.*)$`)
-//  tmp := r.FindAllStringSubmatch(str,-1)
-//  if(len(tmp) != 1){
+    for iii = 0 ; iii < len ; iii++ {
+        c := data[iii] ;
+        if(((iii % 16) == 0) && (iii != 0)){
+            text = text + "  " + ascii + "\n" ;
+            text = text + sprintf("%04x: ",iii) ;
+            ascii = "" ;
+        }
+        text = text + sprintf("%02x ",c) ;
+        if((c >= 0x20) && (c <= 0x7e)){
+            ascii = ascii + Chr(c) ;
+        }else{
+            ascii = ascii + "." ;
+        }
+    }
 
+    for {
+        if((iii % 16) == 0){
+            break ;
+        }else{
+            text = text + "  " ;
+        }
+        iii++ ;
+    }
+    text = text + "  " + ascii + "\n" ;
+    return text ;
+}
 
-    if(true){
-        printf("不一致/mess[%s].\n",str) ;
+type SyslogProtocol struct {
+    Pri int ;
+    Facility    syslog.Priority ;
+    Priority    syslog.Priority ;
+
+    Timestamp   string ;
+    Tag         string ;
+    Pid         int ;
+
+    Message     string ;
+}
+
+func parseSyslogProtocol(str string) (SyslogProtocol,error){
+
+    ret := SyslogProtocol{} ;
+
+    var err error ;
+
+    var allMatches [][]string ;
+
+    a := Substr(str,0,1) ; _ = a ;
+    b := Substr(str,1,1) ; _ = b ;
+    c := Substr(str,2,1) ; _ = c ;
+    d := Substr(str,3,1) ; _ = d ;
+    e := Substr(str,4,1) ; _ = e ;
+
+    var head string ; _ = head ;
+    var timestamp string ; _ = timestamp ;
+    var tag string ; _ = tag ;
+    var pid string ; _ = pid ;
+    var mess string ; _ = mess ;
+
+    lenDec := 0 ;
+
+    if(a != "<"){ return ret,errorf("broken") ; }
+
+    if(c == ">"){ lenDec = 1 ; }
+    if(d == ">"){ lenDec = 2 ; }
+    if(e == ">"){ lenDec = 3 ; }
+
+    if ret.Pri,err = strconv.Atoi(Substr(str,1,lenDec)) ; (err != nil){
+        return ret,err ;
     }else{
-        matches := tmp[0] ;
-        pri,_  := strconv.Atoi(matches[1]) ;  _ = pri ;
-        date := Trim(matches[2]) ; _ = date ;
-        mess := Trim(matches[3]) ; _ = mess ;
-
-        facilityN := pri / 8 ; _ = Facility ;
-        priorityN := pri % 8 ; _ = Priority ;
+        facilityN := ret.Pri / 8 ; _ = facilityN ;
+        priorityN := ret.Pri % 8 ; _ = priorityN ;
 
         switch(facilityN){
-            case 0:{
-                Facility = "LOG_KERN" ;
-                facility = syslog.LOG_KERN ;
-            }
-            case 1:{
-                Facility = "LOG_USER" ;
-                facility = syslog.LOG_USER ;
-            }
-            case 2:{
-                Facility = "LOG_MAIL" ;
-                facility = syslog.LOG_MAIL ;
-            }
-            case 3:{
-                Facility = "LOG_DAEMON" ;
-                facility = syslog.LOG_DAEMON ;
-            }
-            case 4:{
-                Facility = "LOG_AUTH" ;
-                facility = syslog.LOG_AUTH ;
-            }
-            case 5:{
-                Facility = "LOG_SYSLOG" ;
-                facility = syslog.LOG_SYSLOG ;
-            }
-            case 6:{
-                Facility = "LOG_LPR" ;
-                facility = syslog.LOG_LPR ;
-            }
-            case 7:{
-                Facility = "LOG_NEWS" ;
-                facility = syslog.LOG_NEWS ;
-            }
-            case 8:{
-                Facility = "LOG_UUCP" ;
-                facility = syslog.LOG_UUCP ;
-            }
-            case 9:{
-                Facility = "LOG_CRON" ;
-                facility = syslog.LOG_CRON ;
-            }
-            case 10:{
-                Facility = "LOG_AUTHPRIV" ;
-                facility = syslog.LOG_AUTHPRIV ;
-            }
-            case 11:{
-                Facility = "LOG_FTP" ;
-                facility = syslog.LOG_FTP ;
-            }
-            case 16:{
-                Facility = "LOG_LOCAL0" ;
-                facility = syslog.LOG_LOCAL0 ;
-            }
-            case 17:{
-                Facility = "LOG_LOCAL1" ;
-                facility = syslog.LOG_LOCAL1 ;
-            }
-            case 18:{
-                Facility = "LOG_LOCAL2" ;
-                facility = syslog.LOG_LOCAL2 ;
-            }
-            case 19:{
-                Facility = "LOG_LOCAL3" ;
-                facility = syslog.LOG_LOCAL3 ;
-            }
-            case 20:{
-                Facility = "LOG_LOCAL4" ;
-                facility = syslog.LOG_LOCAL4 ;
-            }
-            case 21:{
-                Facility = "LOG_LOCAL5" ;
-                facility = syslog.LOG_LOCAL5 ;
-            }
-            case 22:{
-                Facility = "LOG_LOCAL6" ;
-                facility = syslog.LOG_LOCAL6 ;
-            }
-            case 23:{
-                Facility = "LOG_LOCAL7" ;
-                facility = syslog.LOG_LOCAL7 ;
-            }
+            case 0:{ ret.Facility = syslog.LOG_KERN ; }
+            case 1:{ ret.Facility = syslog.LOG_USER ; }
+            case 2:{ ret.Facility = syslog.LOG_MAIL ; }
+            case 3:{ ret.Facility = syslog.LOG_DAEMON ; }
+            case 4:{ ret.Facility = syslog.LOG_AUTH ; }
+            case 5:{ ret.Facility = syslog.LOG_SYSLOG ; }
+            case 6:{ ret.Facility = syslog.LOG_LPR ; }
+            case 7:{ ret.Facility = syslog.LOG_NEWS ; }
+            case 8:{ ret.Facility = syslog.LOG_UUCP ; }
+            case 9:{ ret.Facility = syslog.LOG_CRON ; }
+            case 10:{ ret.Facility = syslog.LOG_AUTHPRIV ; }
+            case 11:{ ret.Facility = syslog.LOG_FTP ; }
+            case 16:{ ret.Facility = syslog.LOG_LOCAL0 ; }
+            case 17:{ ret.Facility = syslog.LOG_LOCAL1 ; }
+            case 18:{ ret.Facility = syslog.LOG_LOCAL2 ; }
+            case 19:{ ret.Facility = syslog.LOG_LOCAL3 ; }
+            case 20:{ ret.Facility = syslog.LOG_LOCAL4 ; }
+            case 21:{ ret.Facility = syslog.LOG_LOCAL5 ; }
+            case 22:{ ret.Facility = syslog.LOG_LOCAL6 ; }
+            case 23:{ ret.Facility = syslog.LOG_LOCAL7 ; }
         }
 
         switch(priorityN){
-            case 0:{
-                Priority = "LOG_EMERG" ;
-                priority = syslog.LOG_EMERG ;
-            }
-            case 1:{
-                Priority = "LOG_ALERT" ;
-                priority = syslog.LOG_ALERT ;
-            }
-            case 2:{
-                Priority = "LOG_CRIT" ;
-                priority = syslog.LOG_CRIT ;
-            }
-            case 3:{
-                Priority = "LOG_ERR" ;
-                priority = syslog.LOG_ERR ;
-            }
-            case 4:{
-                Priority = "LOG_WARNING" ;
-                priority = syslog.LOG_WARNING ;
-            }
-            case 5:{
-                Priority = "LOG_NOTICE" ;
-                priority = syslog.LOG_NOTICE ;
-            }
-            case 6:{
-                Priority = "LOG_INFO" ;
-                priority = syslog.LOG_INFO ;
-            }
-            case 7:{
-                Priority = "LOG_DEBUG" ;
-                priority = syslog.LOG_DEBUG ;
+            case 0:{ ret.Priority = syslog.LOG_EMERG ; }
+            case 1:{ ret.Priority = syslog.LOG_ALERT ; }
+            case 2:{ ret.Priority = syslog.LOG_CRIT ; }
+            case 3:{ ret.Priority = syslog.LOG_ERR ; }
+            case 4:{ ret.Priority = syslog.LOG_WARNING ; }
+            case 5:{ ret.Priority = syslog.LOG_NOTICE ; }
+            case 6:{ ret.Priority = syslog.LOG_INFO ; }
+            case 7:{ ret.Priority = syslog.LOG_DEBUG ; }
+        }
+    }
+
+    if(true){
+        lenPri := lenDec + 2 ;
+        tmp := string([]rune(str)[lenPri:]) ;
+
+        reg_01 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)([^\[\]\:]*)\[(\d+)\]\:\s*`)
+        reg_02 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)([^\[\]\:]*)\:\s*`)
+        reg_03 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)`)
+
+        allMatches = reg_01.FindAllStringSubmatch(Trim(tmp),-1)
+        if(len(allMatches) == 1){
+            for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+
+            head        = allMatches[0][0] ;
+            timestamp   = allMatches[0][1] ;
+            tag         = allMatches[0][2] ;
+            pid         = allMatches[0][3] ;
+
+            printf("A[%s]\n",head) ;
+        }else{
+            allMatches := reg_02.FindAllStringSubmatch(Trim(tmp),-1)
+            if(len(allMatches) == 1){
+                for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+                head      = allMatches[0][0] ;
+                timestamp = allMatches[0][1] ;
+                tag       = allMatches[0][2] ;
+                printf("B[%s]\n",head) ;
+            }else{
+                allMatches := reg_03.FindAllStringSubmatch(Trim(tmp),-1)
+                if(len(allMatches) == 1){
+                    for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
+                    head      = allMatches[0][0] ;
+                    timestamp = allMatches[0][1] ;
+                    printf("C[%s]\n",head) ;
+                }
             }
         }
 
-        SyslogRouting(router,pri,facility,priority,date,mess) ;
+        if(timestamp != ""){
+            ret.Timestamp = Trim(timestamp) ;
+        }
+        if(tag != ""){
+            ret.Tag = Trim(tag) ;
+        }
+        if(pid != ""){
+            ret.Pri,_ = strconv.Atoi(pid) ;
+        }
+
+        if(head != ""){
+            mess = Substr(tmp,len(head)) ;
+        }
+
+        if(mess != ""){
+            printf("!!!-mess[%s]\n",mess) ;
+
+            ret.Message = Ltrim(mess) ;
+        }
     }
-*/
+
+    return ret,nil ;
 }
 
-func SyslogDaemonNode(addrListen string,router *SyslogRouter){
+func EvRecvSyslog(router *SyslogRouter,str string){
+    rc,err := parseSyslogProtocol(str) ;
+    if(err != nil){
+        print("err[%s]\n",err) ;
+    }else{
+        SyslogRouting(router,rc) ;
+    }
+}
+
+func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
     netDial := "unix" ; _ = netDial ;
     addrDial := "/dev/log" ; _ = addrDial ;
 
+    if(router.Err != nil){
+        return router.Err
+    }
+
     if(addrListen != ""){
         if ui , err := url.Parse(addrListen) ; (err != nil){
-            printf("err-8[%s]\n",err) ;
+            return err ;
         }else{
             switch(ui.Scheme){
                 case "unix":{
@@ -857,24 +910,28 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter){
     unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
 
     if(err != nil){
-        printf("err-9[%s]\n",err) ;
+        return err ;
     }else{
         sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
         if(err != nil){
-            printf("err-10[%s]\n",err) ;
+            return err ;
         }else{
-            // printf("ok[%s]\n",addrDial) ;
             for{
                 unixConn, err := sockListen.Accept() ;
                 defer unixConn.Close() ;
                 if(err != nil){
-                    printf("err-11[%s]\n",err) ;
+                    return err ;
                 }else{
-                    buf := make([]byte,4096) ;
-                    var szRc int ; _ = szRc ;
+                    buf := make([]byte,0x1000) ;
+                    var szRc int ;
                     szRc,err = unixConn.Read(buf) ;
                     if(err == nil){
-                        EvRecvSyslog(router,Trim(string(buf))) ;
+                        EvRecvSyslog(router,string(buf[:szRc])) ;
+                        if(router.Err != nil){
+                            return router.Err
+                        }
+                    }else{
+                        return err ;
                     }
                 }
             }
@@ -906,7 +963,9 @@ func SyslogDaemon(opts ... any) (error){
     }
 
     for _,addrListen := range addrListens{
-        go SyslogDaemonNode(addrListen,router) ;
+        go func(){
+            SyslogDaemonNode(addrListen,router) ;
+        }() ;
     }
 
     time.Sleep(1 * time.Second) ;
