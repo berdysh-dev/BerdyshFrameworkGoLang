@@ -1060,7 +1060,7 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
                                     printf("recv(%d)[%s]\n",szRc,err) ;
                                     break ;
                                 }else{
-                                    printf("recv(%d)[EOF]\n",szRc) ;
+                                    printf("recv(%d)[%s]\n",szRc,err) ;
                                     return err ;
                                 }
                             }
