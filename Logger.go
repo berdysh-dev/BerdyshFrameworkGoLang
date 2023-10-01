@@ -902,7 +902,7 @@ func IsNumPri(r []rune) (int,error) {
     return strconv.Atoi(str) ;
 }
 
-func SyslogSplit(fifo string) (string){
+func SyslogSplit(fifo string) (string,error){
 
     runes := []rune(fifo) ; _ = runes ;
     max := len(runes) ;
@@ -923,7 +923,9 @@ func SyslogSplit(fifo string) (string){
 
     headLen := -1 ; _ = headLen ;
 
+    loop := 0 ;
     for ((idx + offset) < max){
+
         c := runes[idx + offset] ;
         priLenTmp := -1 ;
         if(c == mark_st){
@@ -973,7 +975,9 @@ func SyslogSplit(fifo string) (string){
                     xLine(line) ;
                     line = make([]rune,0) ;
                     priStr = make([]rune,0) ;
+                    loop++ ;
                 }
+                headLen = -1 ;
             }else{
                 idx += 1 ;
                 line = append(line,c) ;
@@ -984,7 +988,37 @@ func SyslogSplit(fifo string) (string){
         }
     }
 
-    return string(line) ;
+    return string(line),nil ;
+}
+
+
+func DoTcp(tcpConn *net.TCPConn) (error){
+    var szRc int ;
+    var err error ;
+
+    printf("TCP-Accept.\n") ;
+    buf := make([]byte,0x1) ;
+    var fifo string ;
+    for{
+        szRc,err = tcpConn.Read(buf) ;
+        if((err == nil) && (szRc == 1)){
+            fifo,err = SyslogSplit(fifo + string(buf)) ;
+            if(err != nil){
+                return err ;
+            }
+        }else{
+            tcpConn.Close() ;
+            SyslogSplit(fifo + "<999>") ;
+            if(err == io.EOF){
+                printf("recv(%d)[%s]\n",szRc,err) ;
+                break ;
+            }else{
+                printf("recv(%d)[%s]\n",szRc,err) ;
+                return err ;
+            }
+        }
+    }
+    return nil ;
 }
 
 func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
@@ -1029,7 +1063,6 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
         }
     }
 
-
     if(netDial == "tcp"){
         tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ;
 
@@ -1045,26 +1078,7 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
                     if(err != nil){
                         return err ;
                     }else{
-                        printf("TCP-Accept.\n") ;
-                        buf := make([]byte,0x1) ;
-                        var szRc int ;
-                        var fifo string ;
-                        for{
-                            szRc,err = tcpConn.Read(buf) ;
-                            if((err == nil) && (szRc == 1)){
-                                fifo = SyslogSplit(fifo + string(buf)) ;
-                            }else{
-                                tcpConn.Close() ;
-                                SyslogSplit(fifo + "<999>") ;
-                                if(err == io.EOF){
-                                    printf("recv(%d)[%s]\n",szRc,err) ;
-                                    break ;
-                                }else{
-                                    printf("recv(%d)[%s]\n",szRc,err) ;
-                                    return err ;
-                                }
-                            }
-                        }
+                        go DoTcp(tcpConn) ;
                     }
                 }
             }
@@ -1091,7 +1105,7 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
                         for {
                             szRc,err = unixConn.Read(buf) ;
                             if(err == nil){
-                                fifo = SyslogSplit(fifo + string(buf[:szRc])) ;
+                                fifo,err = SyslogSplit(fifo + string(buf[:szRc])) ;
                             }else{
                                 unixConn.Close() ;
                                 SyslogSplit(fifo + "<999>") ;
