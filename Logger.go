@@ -86,6 +86,9 @@ func (this *Logger) Log(level slog.Level,msg string,a ... any){
 func IsPathGOROOT(path string) bool{
     p2,ok := os.LookupEnv("GOROOT") ;
     if(ok){
+
+        printf("p2[%V]",p2) ;
+
         a := strings.Split(p2,      "/") ;
         b := strings.Split(path,    "/") ;
         for idx,_ := range a{
@@ -638,8 +641,8 @@ func NewSyslogRouter() (*SyslogRouter){
 
 func Tick(){
     for lp:=1;;lp+=1 {
-        time.Sleep(1 * time.Second) ;
-        Debugf("Syslogd[%06d].",lp) ;
+        time.Sleep(30 * time.Second) ;
+        // printf("Syslogd[%06d].\n",lp) ;
     }
 }
 
@@ -890,15 +893,114 @@ func EvRecvSyslog(router *SyslogRouter,str string){
     }
 }
 
+func xLine(line []rune){
+    printf("[%s]\n",Trim(string(line))) ;
+}
+
+func IsNumPri(r []rune) (int,error) {
+    str := string(r) ;
+    return strconv.Atoi(str) ;
+}
+
+func SyslogSplit(fifo string) (string){
+
+    runes := []rune(fifo) ; _ = runes ;
+    max := len(runes) ;
+    idx := 0 ;
+    offset := 0 ;
+    step := 0 ;
+
+    // printf("----[%s]\n",fifo) ;
+
+    var mark_st rune = 0x3C ; // <
+    var mark_en rune = 0x3E ; // >
+
+    line := make([]rune,0) ;
+    priStr := make([]rune,0) ;
+
+    priLen      := -1 ; _ = priLen ;
+    priLenAfter := -1 ; _ = priLenAfter ;
+
+    headLen := -1 ; _ = headLen ;
+
+    for ((idx + offset) < max){
+        c := runes[idx + offset] ;
+        priLenTmp := -1 ;
+        if(c == mark_st){
+            if((max > (idx + offset + 1)) && (mark_en == runes[idx + offset + 1])){ priLenTmp = 2 ; }else
+            if((max > (idx + offset + 2)) && (mark_en == runes[idx + offset + 2])){ priLenTmp = 3 ; }else
+            if((max > (idx + offset + 3)) && (mark_en == runes[idx + offset + 3])){ priLenTmp = 4 ; }else
+            if((max > (idx + offset + 4)) && (mark_en == runes[idx + offset + 4])){ priLenTmp = 5 ; }
+
+            if(priLenTmp >= 0){
+                pri,err := IsNumPri(runes[(idx + offset+1):(idx + offset + priLenTmp-1)]) ;
+                if(err != nil){
+                    for xxx := 0;xxx < priLenTmp ; xxx++ {
+                        c2 := runes[idx + offset + xxx] ;
+                        line = append(line,c2) ;
+                    }
+                    idx += priLenTmp ;
+                }else{
+                    if(pri == 999){
+                        headLen = priLenTmp ;
+                    }else{
+                        headLen = priLenTmp ;
+                    }
+                }
+            }
+
+            if(headLen >= 0){
+                if(step == 0){
+                    priLen = priLenTmp ;
+                    for xxx := 0;xxx < priLenTmp ; xxx++ {
+                        c2 := runes[offset + xxx] ;
+                        line = append(line,c2) ;
+                        priStr = append(priStr,c2) ;
+                    }
+                    step = 1 ;
+                    idx += priLenTmp ;
+                }else{
+                    priLenAfter = priLenTmp ;
+                    priTmpAfter := make([]rune,0) ;
+
+                    for xxx := 0;xxx < priLenAfter ; xxx++ {
+                        priTmpAfter = append(priTmpAfter,runes[offset + idx + xxx]) ;
+                    }
+
+                    step = 0 ;
+                    offset += idx ;
+                    idx = 0 ;
+                    xLine(line) ;
+                    line = make([]rune,0) ;
+                    priStr = make([]rune,0) ;
+                }
+            }else{
+                idx += 1 ;
+                line = append(line,c) ;
+            }
+        }else{
+            idx += 1 ;
+            line = append(line,c) ;
+        }
+    }
+
+    return string(line) ;
+}
+
 func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
     netDial := "unix" ; _ = netDial ;
     addrDial := "/dev/log" ; _ = addrDial ;
+
+    if(router == nil){
+        return errorf("router 未設定") ;
+    }
 
     if(router.Err != nil){
         return router.Err
     }
 
     if(addrListen != ""){
+        printf("[%s]\n",addrListen) ;
         if ui , err := url.Parse(addrListen) ; (err != nil){
             return err ;
         }else{
@@ -906,6 +1008,14 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
                 case "unix":{
                     netDial = "unix" ;
                     addrDial = ui.Path ;
+                }
+                case "tcp","udp":{
+                    netDial = ui.Scheme ;
+                    addrDial = ui.Host ;
+                }
+                default:{
+                    a := strings.Split(ui.Host,":") ;
+                    printf("Other:Host[%s:%s]\n",a[0],a[1]) ;
                 }
             }
         }
@@ -919,38 +1029,86 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
         }
     }
 
-    unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
 
-    if(err != nil){
-        return err ;
-    }else{
-        sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
+    if(netDial == "tcp"){
+        tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ;
+
         if(err != nil){
             return err ;
         }else{
-            for{
-                unixConn, err := sockListen.Accept() ;
-                if(err != nil){
-                    return err ;
-                }else{
-                    defer unixConn.Close() ;
-                    buf := make([]byte,0x1000) ;
-                    var szRc int ;
-                    var fifo string ;
-                    for {
-                        szRc,err = unixConn.Read(buf) ;
-                        if(err == nil){
-                            fifo = fifo + string(buf[:szRc]) ;
+            if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err != nil){
+                return err ;
+            }else{
+                printf("TCP-Listen.\n") ;
+                for{
+                    tcpConn,err := tcpListener.AcceptTCP() ; _ = tcpConn ;
+                    if(err != nil){
+                        return err ;
+                    }else{
+                        printf("TCP-Accept.\n") ;
+                        buf := make([]byte,0x1) ;
+                        var szRc int ;
+                        var fifo string ;
+                        for{
+                            szRc,err = tcpConn.Read(buf) ;
+                            if((err == nil) && (szRc == 1)){
+                                fifo = SyslogSplit(fifo + string(buf)) ;
+                            }else{
+                                tcpConn.Close() ;
+                                SyslogSplit(fifo + "<999>") ;
+                                if(err == io.EOF){
+                                    printf("recv(%d)[%s]\n",szRc,err) ;
+                                    break ;
+                                }else{
+                                    printf("recv(%d)[EOF]\n",szRc) ;
+                                    return err ;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-                            printf("%s\n",fifo);
-                        }else{
-                            return err ;
+    }else if(netDial == "unix"){
+        unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
+
+        if(err != nil){
+            return err ;
+        }else{
+            sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
+            if(err != nil){
+                return err ;
+            }else{
+                for{
+                    unixConn, err := sockListen.Accept() ;
+                    if(err != nil){
+                        return err ;
+                    }else{
+                        buf := make([]byte,0x1000) ;
+                        var szRc int ;
+                        var fifo string ;
+                        for {
+                            szRc,err = unixConn.Read(buf) ;
+                            if(err == nil){
+                                fifo = SyslogSplit(fifo + string(buf[:szRc])) ;
+                            }else{
+                                unixConn.Close() ;
+                                SyslogSplit(fifo + "<999>") ;
+                                if(err == io.EOF){
+                                    break ;
+                                }else{
+                                    printf("recv[%s]\n",err) ;
+                                    return err ;
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+    return errorf("Assert") ;
 }
 
 func SyslogDaemon(opts ... any) (error){
@@ -973,12 +1131,17 @@ func SyslogDaemon(opts ... any) (error){
     }
 
     if(len(addrListens) == 0){
-        addrListens = append(addrListens,"unix:///dev/log") ;
+        if(true){
+            addrListens = append(addrListens,"tcp://0.0.0.0:514") ;
+        }else{
+            addrListens = append(addrListens,"unix:///dev/log") ;
+        }
     }
 
     for _,addrListen := range addrListens{
-        // go func(){}() ;
-        SyslogDaemonNode(addrListen,router) ;
+        if err := SyslogDaemonNode(addrListen,router) ; (err != nil){
+            return err ;
+        }
     }
 
     /// time.Sleep(1 * time.Second) ;
@@ -986,7 +1149,17 @@ func SyslogDaemon(opts ... any) (error){
     return nil ;
 }
 
+func SyslogServer(){
+    printf("St.\n") ;
 
+    var router *SyslogRouter = NewSyslogRouter() ;
+
+    if err := SyslogDaemon(router) ; (err != nil){
+        printf("err[%s].\n",err) ;
+    }
+    
+    printf("En.\n") ;
+}
 
 
 

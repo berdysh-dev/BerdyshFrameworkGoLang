@@ -438,8 +438,9 @@ func    Entry() {
 
     addr := ":9005" ;
 
-    if(true){ go X.Syslogd() ; }
-    if(false){ go X.Tick() ; }
+
+    if(true){ go X.SyslogServer() ; }
+    if(true){ X.Tick() ; }
 
     if(false){ EntryGin(addr) ; }
     if(false){ EntryGorilla(addr) ; }
@@ -453,7 +454,7 @@ func    Entry() {
     if(false){ EntryIris(addr) ; }
     if(false){ EntryVanilla(addr) ; }
 
-    if(true){ Test() ; }
+    if(false){ Test() ; }
 
 }
 
