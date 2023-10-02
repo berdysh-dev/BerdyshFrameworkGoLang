@@ -828,7 +828,8 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
     pid  := make([]rune,0) ;
     mes  := make([]rune,0) ;
 
-    flagTag := false ;
+    flagTag := false ; _ = flagTag ;
+    flagHostname := false ; _ = flagHostname ;
 
     max := len(line) ;
     idx := 0 ;
@@ -921,6 +922,7 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
                     step = 18 ;
                     idx++ ;
                     rc.Tag = string(tag) ;
+                    tag = make([]rune,0) ;
                     flagTag = true ;
                 }else if(c == Ord("[")){
                     step = 14 ;
@@ -928,9 +930,18 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
                     rc.Tag = string(tag) ;
                     flagTag = true ;
                 }else if(c == Ord(" ")){
-                    rc.Hostname = string(tag) ;
-                    tag = make([]rune,0) ;
-                    idx++ ;
+                    if(flagHostname != false){
+                        step = 30 ;
+                        idx++ ;
+                        flagTag = true ;
+                        mes = append(tag,c) ;
+                        tag = make([]rune,0) ;
+                    }else{
+                        flagHostname = true ;
+                        rc.Hostname = string(tag) ;
+                        tag = make([]rune,0) ;
+                        idx++ ;
+                    }
                 }else{
                     tag = append(tag,c) ;
                     idx++ ;
@@ -967,6 +978,7 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
             }
             case 20:{
             }
+
             case 30:{
                 mes = append(mes,c) ;
                 idx++ ;
@@ -974,137 +986,17 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
         }
     }
 
-    if((flagTag == false) && (len(tag)>0)){
+    if(len(tag) > 0){
         rc.Message = string(tag) ;
     }else{
-        rc.Message = string(mes) ;
+        rc.Message = "" ;
+    }
+
+    if(len(mes) > 0){
+        rc.Message += string(mes) ;
     }
 
     return rc,nil ;
-/*
-
-    var allMatches [][]string ;
-
-    a := Substr(str,0,1) ; _ = a ;
-    b := Substr(str,1,1) ; _ = b ;
-    c := Substr(str,2,1) ; _ = c ;
-    d := Substr(str,3,1) ; _ = d ;
-    e := Substr(str,4,1) ; _ = e ;
-
-    var head string ; _ = head ;
-    var timestamp string ; _ = timestamp ;
-    var tag string ; _ = tag ;
-    var pid string ; _ = pid ;
-    var mess string ; _ = mess ;
-
-    lenDec := 0 ;
-
-    if(a != "<"){ return ret,errorf("broken") ; }
-
-    if(c == ">"){ lenDec = 1 ; }
-    if(d == ">"){ lenDec = 2 ; }
-    if(e == ">"){ lenDec = 3 ; }
-
-    if ret.Pri,err = strconv.Atoi(Substr(str,1,lenDec)) ; (err != nil){
-        return ret,err ;
-    }else{
-        facilityN := ret.Pri / 8 ; _ = facilityN ;
-        priorityN := ret.Pri % 8 ; _ = priorityN ;
-
-        switch(facilityN){
-            case 0:{ ret.Facility = syslog.LOG_KERN ; }
-            case 1:{ ret.Facility = syslog.LOG_USER ; }
-            case 2:{ ret.Facility = syslog.LOG_MAIL ; }
-            case 3:{ ret.Facility = syslog.LOG_DAEMON ; }
-            case 4:{ ret.Facility = syslog.LOG_AUTH ; }
-            case 5:{ ret.Facility = syslog.LOG_SYSLOG ; }
-            case 6:{ ret.Facility = syslog.LOG_LPR ; }
-            case 7:{ ret.Facility = syslog.LOG_NEWS ; }
-            case 8:{ ret.Facility = syslog.LOG_UUCP ; }
-            case 9:{ ret.Facility = syslog.LOG_CRON ; }
-            case 10:{ ret.Facility = syslog.LOG_AUTHPRIV ; }
-            case 11:{ ret.Facility = syslog.LOG_FTP ; }
-            case 16:{ ret.Facility = syslog.LOG_LOCAL0 ; }
-            case 17:{ ret.Facility = syslog.LOG_LOCAL1 ; }
-            case 18:{ ret.Facility = syslog.LOG_LOCAL2 ; }
-            case 19:{ ret.Facility = syslog.LOG_LOCAL3 ; }
-            case 20:{ ret.Facility = syslog.LOG_LOCAL4 ; }
-            case 21:{ ret.Facility = syslog.LOG_LOCAL5 ; }
-            case 22:{ ret.Facility = syslog.LOG_LOCAL6 ; }
-            case 23:{ ret.Facility = syslog.LOG_LOCAL7 ; }
-        }
-
-        switch(priorityN){
-            case 0:{ ret.Priority = syslog.LOG_EMERG ; }
-            case 1:{ ret.Priority = syslog.LOG_ALERT ; }
-            case 2:{ ret.Priority = syslog.LOG_CRIT ; }
-            case 3:{ ret.Priority = syslog.LOG_ERR ; }
-            case 4:{ ret.Priority = syslog.LOG_WARNING ; }
-            case 5:{ ret.Priority = syslog.LOG_NOTICE ; }
-            case 6:{ ret.Priority = syslog.LOG_INFO ; }
-            case 7:{ ret.Priority = syslog.LOG_DEBUG ; }
-        }
-    }
-
-    if(true){
-        lenPri := lenDec + 2 ;
-        tmp := string([]rune(str)[lenPri:]) ;
-
-        reg_01 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)([^\[\]\:]*)\[(\d+)\]\:\s*`)
-        reg_02 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)([^\[\]\:]*)\:\s*`)
-        reg_03 := regexp.MustCompile(`^(.*\d\d:\d\d:\d\d\s*)`)
-
-        allMatches = reg_01.FindAllStringSubmatch(Trim(tmp),-1)
-        if(len(allMatches) == 1){
-            // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
-
-            head        = allMatches[0][0] ;
-            timestamp   = allMatches[0][1] ;
-            tag         = allMatches[0][2] ;
-            pid         = allMatches[0][3] ;
-
-            // printf("A[%s]\n",head) ;
-        }else{
-            allMatches := reg_02.FindAllStringSubmatch(Trim(tmp),-1)
-            if(len(allMatches) == 1){
-                // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
-                head      = allMatches[0][0] ;
-                timestamp = allMatches[0][1] ;
-                tag       = allMatches[0][2] ;
-                // printf("B[%s]\n",head) ;
-            }else{
-                allMatches := reg_03.FindAllStringSubmatch(Trim(tmp),-1)
-                if(len(allMatches) == 1){
-                    // for idx,x := range allMatches[0]{ printf("[%d][%s]\n",idx,x) ; }
-
-                    head      = allMatches[0][0] ;
-                    timestamp = allMatches[0][1] ;
-                    // printf("C[%s]\n",head) ;
-                }
-            }
-        }
-
-        if(timestamp != ""){
-            ret.Timestamp = Trim(timestamp) ;
-        }
-        if(tag != ""){
-            ret.Tag = Trim(tag) ;
-        }
-        if(pid != ""){
-            ret.Pri,_ = strconv.Atoi(pid) ;
-        }
-
-        if(head != ""){
-            mess = Substr(tmp,len(head)) ;
-        }
-
-        if(mess != ""){
-            printf("!!!-mess[%s]\n",mess) ;
-
-            ret.Message = Ltrim(mess) ;
-        }
-    }
-*/
 }
 
 func (this *TypeSyslogDaemon) SyslogSplit(fifo string) (string,error){
