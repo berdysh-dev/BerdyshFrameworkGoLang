@@ -593,14 +593,31 @@ const (
 )
 
 type SyslogHandle interface {
-    EvRecv(facility syslog.Priority,level syslog.Priority,date string,mess string) ;
+    EvRecv(rc *SyslogEntry) ;
     GetId() (string) ;
 }
 
 type SyslogEntry struct {
-    Facility        syslog.Priority ;
-    Level           syslog.Priority ;
-    Handle          SyslogHandle ;
+
+    Pri         int ;
+    Facility    syslog.Priority ;
+    Priority    syslog.Priority ;
+
+    Timestamp   string ;
+    Tag         string ;
+    AppName     string ;
+    Hostname    string ;
+    Msgid       string ;
+    Pid         int ;
+    Version     int ;
+
+    IsRFC3164   bool ;
+    IsRFC5424   bool ;
+    IsRFC6587   bool ;
+
+    Message     string ;
+
+    Handle      SyslogHandle ;
 }
 
 
@@ -647,7 +664,7 @@ func Tick(){
     }
 }
 
-func SyslogRouting(router *SyslogRouter,rc SyslogProtocol){
+func (this *TypeSyslogDaemon) SyslogRouting(rc *SyslogEntry){
 
     maxScore := -1 ;
 
@@ -657,11 +674,11 @@ func SyslogRouting(router *SyslogRouter,rc SyslogProtocol){
     var last  SyslogEntry ; _ = last ;
 
     count := 0 ;
-    for _,e := range router.Entrys{
+    for _,e := range this.router.Entrys{
         score := 0 ;
 
         if(e.Facility == rc.Facility){
-            if(e.Level == rc.Priority){
+            if(e.Priority == rc.Priority){
                 score += 1 ;
             }else{
                 score += 2 ;
@@ -679,15 +696,15 @@ func SyslogRouting(router *SyslogRouter,rc SyslogProtocol){
         last = e ;
     }
 
-    if((IsFind == false) && (count == 1) && (last.Facility == 0) && (last.Level == 0)){
+    if((IsFind == false) && (count == 1) && (last.Facility == 0) && (last.Priority == 0)){
         entry = last ;
         IsFind = true ;
     }
 
     if(IsFind){
-        entry.Handle.EvRecv(rc.Facility,rc.Priority,rc.Timestamp,rc.Message) ;
+        entry.Handle.EvRecv(rc) ;
     }else{
-        printf("NotFound[%d].\n",count) ;
+        printf("Rout/NotFound[%d].\n",count) ;
     }
 }
 
@@ -729,38 +746,27 @@ func Hexdump(x any) (string){
     return text ;
 }
 
-type SyslogProtocol struct {
-    Pri int ;
-    Facility    syslog.Priority ;
-    Priority    syslog.Priority ;
-
-    Timestamp   string ;
-    Tag         string ;
-    AppName     string ;
-    Hostname    string ;
-    Msgid       string ;
-    Pid         int ;
-    Version     int ;
-
-    IsRFC3164   bool ;
-    IsRFC5424   bool ;
-    IsRFC6587   bool ;
-
-    Message     string ;
-}
-
 func (this *TypeSyslogDaemon) EvLine(line []rune){
-    var rc SyslogProtocol ;
+    var rc SyslogEntry ;
     var err error ;
-    printf("[%s]\n",string(line)) ;
+
+    // printf("[%s]\n",string(line)) ;
+
     if rc,err = parseSyslogProtocol(line) ; (err != nil){
         printf("err[%s]\n",err) ;
     }else{
         printf("Pri[%d]\n",rc.Pri) ;
+
+        printf("Facility[0x%02x]\n",rc.Facility) ;
+        printf("Priority[0x%02x]\n",rc.Priority) ;
+
         printf("Timestamp[%s]\n",rc.Timestamp) ;
+        printf("Hostname[%s]\n",rc.Hostname) ;
         printf("Tag[%s]\n",rc.Tag) ;
         if(rc.Pid != 0){ printf("Pid[%d]\n",rc.Pid) ; }
         printf("Message[%s]\n",rc.Message) ;
+
+        this.SyslogRouting(&rc) ;
     }
 }
 
@@ -769,12 +775,52 @@ func IsNumPri(r []rune) (int,error) {
     return strconv.Atoi(str) ;
 }
 
-func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
-    rc := SyslogProtocol{} ;
+func parseSyslogProtocolPri(rc *SyslogEntry){
+
+    facilityN := rc.Pri / 8 ; _ = facilityN ;
+    priorityN := rc.Pri % 8 ; _ = priorityN ;
+
+    switch(facilityN){
+        case 0:{ rc.Facility = syslog.LOG_KERN ; }
+        case 1:{ rc.Facility = syslog.LOG_USER ; }
+        case 2:{ rc.Facility = syslog.LOG_MAIL ; }
+        case 3:{ rc.Facility = syslog.LOG_DAEMON ; }
+        case 4:{ rc.Facility = syslog.LOG_AUTH ; }
+        case 5:{ rc.Facility = syslog.LOG_SYSLOG ; }
+        case 6:{ rc.Facility = syslog.LOG_LPR ; }
+        case 7:{ rc.Facility = syslog.LOG_NEWS ; }
+        case 8:{ rc.Facility = syslog.LOG_UUCP ; }
+        case 9:{ rc.Facility = syslog.LOG_CRON ; }
+        case 10:{ rc.Facility = syslog.LOG_AUTHPRIV ; }
+        case 11:{ rc.Facility = syslog.LOG_FTP ; }
+        case 16:{ rc.Facility = syslog.LOG_LOCAL0 ; }
+        case 17:{ rc.Facility = syslog.LOG_LOCAL1 ; }
+        case 18:{ rc.Facility = syslog.LOG_LOCAL2 ; }
+        case 19:{ rc.Facility = syslog.LOG_LOCAL3 ; }
+        case 20:{ rc.Facility = syslog.LOG_LOCAL4 ; }
+        case 21:{ rc.Facility = syslog.LOG_LOCAL5 ; }
+        case 22:{ rc.Facility = syslog.LOG_LOCAL6 ; }
+        case 23:{ rc.Facility = syslog.LOG_LOCAL7 ; }
+    }
+
+    switch(priorityN){
+        case 0:{ rc.Priority = syslog.LOG_EMERG ; }
+        case 1:{ rc.Priority = syslog.LOG_ALERT ; }
+        case 2:{ rc.Priority = syslog.LOG_CRIT ; }
+        case 3:{ rc.Priority = syslog.LOG_ERR ; }
+        case 4:{ rc.Priority = syslog.LOG_WARNING ; }
+        case 5:{ rc.Priority = syslog.LOG_NOTICE ; }
+        case 6:{ rc.Priority = syslog.LOG_INFO ; }
+        case 7:{ rc.Priority = syslog.LOG_DEBUG ; }
+    }
+}
+
+func parseSyslogProtocol(line []rune) (SyslogEntry,error){
+    rc := SyslogEntry{} ;
     var err error = nil ; _ = err ;
 
-    var mark_st rune = 0x3C ; // <
-    var mark_en rune = 0x3E ; // >
+    var mark_st rune = Ord("<") ;
+    var mark_en rune = Ord(">") ;
 
     prio := make([]rune,0) ;
     date := make([]rune,0) ;
@@ -788,8 +834,22 @@ func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
     idx := 0 ;
     step := 0 ;
 
+    var c  rune ; _ = c ;
+    var c2 rune ; _ = c2 ;
+
     for(idx < max){
-        c := line[idx] ;
+        c  = line[idx + 0] ;
+        if((idx+2) < max){
+            c2 = line[idx + 1] ;
+        }else{
+            c2 = 0 ;
+        }
+
+        if((c == 0) || (c == 0x0a)){
+            idx++ ;
+            continue ;
+        }
+
         switch(step){
             case 0:{
                 if(c == mark_st){
@@ -806,6 +866,7 @@ func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
                     if(err != nil){
                         return rc,err ;
                     }else{
+                        parseSyslogProtocolPri(&rc) ;
                         step = 2 ;
                     }
                 }else{
@@ -814,15 +875,29 @@ func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
                 }
             }
             case 2:{
-                if(c == Ord("1")){ /* <123>1 */
+                if(c == Ord("1") && c2 == Ord(" ")){ /* <123>1 */
                     idx++ ;
                     step = 20 ;
-                }else{
+                }else if((c >= Ord("A")) && (c <= Ord("Z"))){ /* Oct */
                     date = append(date,c) ;
                     idx++ ;
                     step = 10 ;
+                }else if((c >= Ord("1")) && (c <= Ord("9"))){ /* 2023-10-02T08:18:35Z */
+                    date = append(date,c) ;
+                    idx++ ;
+                    step = 5 ;
                 }
             }
+            case 5:{
+                if(c == Ord(" ")){
+                    rc.Timestamp = string(date) ;
+                    step = 11 ;
+                }else{
+                    date = append(date,c) ;
+                    idx++ ;
+                }
+            }
+
             case 10:{
                 date = append(date,c) ;
                 idx++ ;
@@ -852,7 +927,10 @@ func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
                     idx++ ;
                     rc.Tag = string(tag) ;
                     flagTag = true ;
-
+                }else if(c == Ord(" ")){
+                    rc.Hostname = string(tag) ;
+                    tag = make([]rune,0) ;
+                    idx++ ;
                 }else{
                     tag = append(tag,c) ;
                     idx++ ;
@@ -1037,10 +1115,12 @@ func (this *TypeSyslogDaemon) SyslogSplit(fifo string) (string,error){
     offset := 0 ;
     step := 0 ;
 
-    // printf("----[%s]\n",fifo) ;
+    printf("----[%s]\n",fifo) ;
 
-    var mark_st rune = 0x3C ; // <
-    var mark_en rune = 0x3E ; // >
+    printf("\n%s\n",Hexdump(fifo)) ;
+
+    var mark_st rune = Ord("<") ;
+    var mark_en rune = Ord(">") ;
 
     line := make([]rune,0) ;
     priStr := make([]rune,0) ;
@@ -1206,6 +1286,8 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
                         if(err != nil){
                             printf("err[%s].\n",err) ;
                         }else{
+                            printf("UDP\n%s\n",Hexdump(string(buf[:szRc]))) ;
+
                             this.SyslogSplit(string(buf[:szRc]) + "<999>") ;
                         }
                     }
@@ -1276,6 +1358,9 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
                                 for {
                                     szRc,err = unixConn.Read(buf) ;
                                     if(err == nil){
+
+                                        printf("\nUnix[0x%x]\n%s\n",szRc,Hexdump(string(buf[:szRc]))) ;
+
                                         fifo,err = this.SyslogSplit(fifo + string(buf[:szRc])) ;
                                     }else{
                                         unixConn.Close() ;
@@ -1355,9 +1440,33 @@ func SyslogDaemon(opts ... any) (error){
     return nil ;
 }
 
+type HandleLocal4 struct { Id  string ; } ;
+type HandleLocal5 struct { Id  string ; } ;
+type HandleLocal6 struct { Id  string ; } ;
+type HandleLocal7 struct { Id  string ; } ;
+
+func (this *HandleLocal4) GetId() (string){ return this.Id ; }
+func (this *HandleLocal5) GetId() (string){ return this.Id ; }
+func (this *HandleLocal6) GetId() (string){ return this.Id ; }
+func (this *HandleLocal7) GetId() (string){ return this.Id ; }
+
+func (this *HandleLocal4) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+func (this *HandleLocal5) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+func (this *HandleLocal6) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+
+func (this *HandleLocal7) EvRecv(rc *SyslogEntry){
+    printf("[%s]\n",this.Id) ;
+    printf("\n%s\n",Hexdump(rc.Message)) ;
+}
+
 func SyslogServer(){
 
     var router *SyslogRouter = NewSyslogRouter() ;
+
+    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL4 } ,&HandleLocal7{Id: "local4"}) ;
+    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL5 } ,&HandleLocal7{Id: "local5"}) ;
+    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL6 } ,&HandleLocal7{Id: "local6"}) ;
+    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL7 } ,&HandleLocal7{Id: "local7"}) ;
 
     if err := SyslogDaemon(router,"unix:///dev/log","tcp://0.0.0.0:514","udp://0.0.0.0:514") ; (err != nil){
         printf("err[%s]-1217.\n",err) ;
