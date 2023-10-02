@@ -33,8 +33,12 @@ func Chr(c interface{}) string {
     return string(c.(byte)) ;
 }
 
-func Ord(c interface{}) byte {
-    return Strval(c)[0] ;
+func Ord(c interface{}) rune {
+    if(sprintf("%T",c) == "string"){
+        r := []rune(c.(string))
+        return r[0] ;
+    }
+    return 0 ;
 }
 
 func Atoi(org interface{}) int{

@@ -7,6 +7,7 @@ import (
     "log/slog"
     "log/syslog"
     "net/url"
+    "net/netip"
     "runtime"
     "strconv"
     "strings"
@@ -14,7 +15,7 @@ import (
     "go.uber.org/zap"
     "net"
     "time"
-    "regexp"
+_   "regexp"
 _   "strconv"
 _   "reflect"
 
@@ -648,8 +649,6 @@ func Tick(){
 
 func SyslogRouting(router *SyslogRouter,rc SyslogProtocol){
 
-    // printf("[%d]/[0x%x]/[0x%x]/[%s]/[%s]\n",rc.Pri,rc.Facility,rc.Priority,rc.Timestamp,Trim(rc.Message)) ;
-
     maxScore := -1 ;
 
     IsFind := false ;
@@ -750,11 +749,161 @@ type SyslogProtocol struct {
     Message     string ;
 }
 
-func parseSyslogProtocol(str string) (SyslogProtocol,error){
-
-    ret := SyslogProtocol{} ;
-
+func (this *TypeSyslogDaemon) EvLine(line []rune){
+    var rc SyslogProtocol ;
     var err error ;
+    printf("[%s]\n",string(line)) ;
+    if rc,err = parseSyslogProtocol(line) ; (err != nil){
+        printf("err[%s]\n",err) ;
+    }else{
+        printf("Pri[%d]\n",rc.Pri) ;
+        printf("Timestamp[%s]\n",rc.Timestamp) ;
+        printf("Tag[%s]\n",rc.Tag) ;
+        if(rc.Pid != 0){ printf("Pid[%d]\n",rc.Pid) ; }
+        printf("Message[%s]\n",rc.Message) ;
+    }
+}
+
+func IsNumPri(r []rune) (int,error) {
+    str := string(r) ;
+    return strconv.Atoi(str) ;
+}
+
+func parseSyslogProtocol(line []rune) (SyslogProtocol,error){
+    rc := SyslogProtocol{} ;
+    var err error = nil ; _ = err ;
+
+    var mark_st rune = 0x3C ; // <
+    var mark_en rune = 0x3E ; // >
+
+    prio := make([]rune,0) ;
+    date := make([]rune,0) ;
+    tag  := make([]rune,0) ;
+    pid  := make([]rune,0) ;
+    mes  := make([]rune,0) ;
+
+    flagTag := false ;
+
+    max := len(line) ;
+    idx := 0 ;
+    step := 0 ;
+
+    for(idx < max){
+        c := line[idx] ;
+        switch(step){
+            case 0:{
+                if(c == mark_st){
+                    step = 1 ;
+                    idx++ ;
+                }else{
+                    return rc,errorf("Broken-1") ;
+                }
+            }
+            case 1:{
+                if(c == mark_en){
+                    idx++ ;
+                    rc.Pri,err = IsNumPri(prio) ;
+                    if(err != nil){
+                        return rc,err ;
+                    }else{
+                        step = 2 ;
+                    }
+                }else{
+                    prio = append(prio,c) ;
+                    idx++ ;
+                }
+            }
+            case 2:{
+                if(c == Ord("1")){ /* <123>1 */
+                    idx++ ;
+                    step = 20 ;
+                }else{
+                    date = append(date,c) ;
+                    idx++ ;
+                    step = 10 ;
+                }
+            }
+            case 10:{
+                date = append(date,c) ;
+                idx++ ;
+
+                if(len(date) == 15){
+                    // len("Oct  2 03:01:01") == 15
+                    rc.Timestamp = string(date) ;
+                    step = 11 ;
+                }
+            }
+            case 11:{
+                if(c == Ord(" ")){
+                    idx++ ;
+                    step = 12 ;
+                }else{
+                    return rc,errorf("Broken-2") ;
+                }
+            }
+            case 12:{
+                if(c == Ord(":")){
+                    step = 18 ;
+                    idx++ ;
+                    rc.Tag = string(tag) ;
+                    flagTag = true ;
+                }else if(c == Ord("[")){
+                    step = 14 ;
+                    idx++ ;
+                    rc.Tag = string(tag) ;
+                    flagTag = true ;
+
+                }else{
+                    tag = append(tag,c) ;
+                    idx++ ;
+                }
+            }
+            case 14:{
+                if(c == Ord("]")){
+                    if rc.Pid,err = strconv.Atoi(string(pid)) ; (err != nil){
+                        return rc,err ;
+                    }else{
+                        step = 17 ;
+                        idx++ ;
+                    }
+                }else{
+                    pid = append(pid,c) ;
+                    idx++ ;
+                }
+            }
+            case 17:{
+                if(c == Ord(":")){
+                    idx++ ;
+                    step = 18 ;
+                }else{
+                    return rc,errorf("Broken-3[0x%02x]",c) ;
+                }
+            }
+            case 18:{
+                if(c == Ord(" ")){
+                    idx++ ;
+                    step = 30 ;
+                }else{
+                    return rc,errorf("Broken-4[0x%02x]",c) ;
+                }
+            }
+            case 20:{
+            }
+            case 30:{
+                mes = append(mes,c) ;
+                idx++ ;
+            }
+        }
+    }
+
+    if((flagTag == false) && (len(tag)>0)){
+        rc.Message = string(tag) ;
+    }else{
+        rc.Message = string(mes) ;
+    }
+
+    return rc,nil ;
+/*
 
     var allMatches [][]string ;
 
@@ -877,32 +1026,10 @@ func parseSyslogProtocol(str string) (SyslogProtocol,error){
             ret.Message = Ltrim(mess) ;
         }
     }
-
-    return ret,nil ;
+*/
 }
 
-func EvRecvSyslog(router *SyslogRouter,str string){
-
-    printf("[%s]\n",str) ;
-
-    rc,err := parseSyslogProtocol(str) ;
-    if(err != nil){
-        print("err[%s]\n",err) ;
-    }else{
-        SyslogRouting(router,rc) ;
-    }
-}
-
-func xLine(line []rune){
-    printf("[%s]\n",Trim(string(line))) ;
-}
-
-func IsNumPri(r []rune) (int,error) {
-    str := string(r) ;
-    return strconv.Atoi(str) ;
-}
-
-func SyslogSplit(fifo string) (string,error){
+func (this *TypeSyslogDaemon) SyslogSplit(fifo string) (string,error){
 
     runes := []rune(fifo) ; _ = runes ;
     max := len(runes) ;
@@ -972,7 +1099,7 @@ func SyslogSplit(fifo string) (string,error){
                     step = 0 ;
                     offset += idx ;
                     idx = 0 ;
-                    xLine(line) ;
+                    this.EvLine(line) ;
                     line = make([]rune,0) ;
                     priStr = make([]rune,0) ;
                     loop++ ;
@@ -991,8 +1118,7 @@ func SyslogSplit(fifo string) (string,error){
     return string(line),nil ;
 }
 
-
-func DoTcp(tcpConn *net.TCPConn) (error){
+func (this *TypeSyslogDaemon) DoTcp(tcpConn *net.TCPConn) (error){
     var szRc int ;
     var err error ;
 
@@ -1002,13 +1128,12 @@ func DoTcp(tcpConn *net.TCPConn) (error){
     for{
         szRc,err = tcpConn.Read(buf) ;
         if((err == nil) && (szRc == 1)){
-            fifo,err = SyslogSplit(fifo + string(buf)) ;
+            fifo,err = this.SyslogSplit(fifo + string(buf)) ;
             if(err != nil){
                 return err ;
             }
         }else{
-            tcpConn.Close() ;
-            SyslogSplit(fifo + "<999>") ;
+            this.SyslogSplit(fifo + "<999>") ;
             if(err == io.EOF){
                 printf("recv(%d)[%s]\n",szRc,err) ;
                 break ;
@@ -1021,16 +1146,18 @@ func DoTcp(tcpConn *net.TCPConn) (error){
     return nil ;
 }
 
-func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
+func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
     netDial := "unix" ; _ = netDial ;
     addrDial := "/dev/log" ; _ = addrDial ;
 
-    if(router == nil){
+    var addrFrom netip.AddrPort ; _ = addrFrom ;
+
+    if(this.router == nil){
         return errorf("router 未設定") ;
     }
 
-    if(router.Err != nil){
-        return router.Err
+    if(this.router.Err != nil){
+        return this.router.Err
     }
 
     if(addrListen != ""){
@@ -1063,71 +1190,122 @@ func SyslogDaemonNode(addrListen string,router *SyslogRouter) (error){
         }
     }
 
-    if(netDial == "tcp"){
-        tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ;
-
-        if(err != nil){
-            return err ;
-        }else{
-            if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err != nil){
-                return err ;
-            }else{
-                printf("TCP-Listen.\n") ;
-                for{
-                    tcpConn,err := tcpListener.AcceptTCP() ; _ = tcpConn ;
-                    if(err != nil){
-                        return err ;
-                    }else{
-                        go DoTcp(tcpConn) ;
-                    }
-                }
-            }
-        }
-
-    }else if(netDial == "unix"){
-        unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
-
-        if(err != nil){
-            return err ;
-        }else{
-            sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
+    if(netDial == "udp"){
+        go func()(error){
+            udpAddr, err := net.ResolveUDPAddr(netDial,addrDial) ;
             if(err != nil){
                 return err ;
             }else{
-                for{
-                    unixConn, err := sockListen.Accept() ;
-                    if(err != nil){
-                        return err ;
-                    }else{
-                        buf := make([]byte,0x1000) ;
-                        var szRc int ;
-                        var fifo string ;
-                        for {
-                            szRc,err = unixConn.Read(buf) ;
-                            if(err == nil){
-                                fifo,err = SyslogSplit(fifo + string(buf[:szRc])) ;
-                            }else{
-                                unixConn.Close() ;
-                                SyslogSplit(fifo + "<999>") ;
-                                if(err == io.EOF){
-                                    break ;
-                                }else{
-                                    printf("recv[%s]\n",err) ;
-                                    return err ;
-                                }
-                            }
+                if udpConn,err := net.ListenUDP(netDial,udpAddr) ; (err != nil){
+                    return err ;
+                }else{
+                    printf("UDP-Listen.\n") ;
+                    buf := make([]byte,0x1000) ;
+                    for {
+                        szRc,addr,err := udpConn.ReadFromUDPAddrPort(buf) ; _ = szRc ; _ = addr ; _ = err ;
+                        if(err != nil){
+                            printf("err[%s].\n",err) ;
+                        }else{
+                            this.SyslogSplit(string(buf[:szRc]) + "<999>") ;
                         }
                     }
                 }
             }
-        }
+            return nil ;
+        }() ;
+    }else if(netDial == "tcp"){
+        go func() (error){
+            tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ;
+
+            if(err != nil){
+                return err ;
+            }else{
+                if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err != nil){
+                    return err ;
+                }else{
+                    defer tcpListener.Close() ;
+                    printf("TCP-Listen.\n") ;
+                    for{
+                        chanTcpConn := make(chan *net.TCPConn) ;
+                        chanTcpErr := make(chan error) ;
+
+                        go func() {
+                            tcpConn, err := tcpListener.AcceptTCP() ;
+                            if (err != nil) {
+                                chanTcpErr <- err ;
+                                return
+                            }
+                            chanTcpConn <- tcpConn
+                        }()
+
+                        select {
+                            case tcpConn := <-chanTcpConn:{
+                                go this.DoTcp(tcpConn) ;
+                            }
+                            case err := <-chanTcpErr:{
+                                printf("err[%s]\n",err)
+                            }
+                        }
+
+                        chanTcpConn = nil
+                        chanTcpErr = nil
+                    }
+                }
+            }
+        }() ;
+    }else if(netDial == "unix"){
+        go func() (error){
+            unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
+            if(err != nil){
+                return err ;
+            }else{
+                sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
+                if(err != nil){
+                    return err ;
+                }else{
+                    printf("UNIX-Listen.\n") ;
+                    for{
+                        unixConn, err := sockListen.Accept() ;
+                        if(err != nil){
+                            return err ;
+                        }else{
+                            go func() (error){
+                                buf := make([]byte,0x1000) ;
+                                var szRc int ;
+                                var fifo string ;
+                                for {
+                                    szRc,err = unixConn.Read(buf) ;
+                                    if(err == nil){
+                                        fifo,err = this.SyslogSplit(fifo + string(buf[:szRc])) ;
+                                    }else{
+                                        unixConn.Close() ;
+                                        this.SyslogSplit(fifo + "<999>") ;
+                                        if(err == io.EOF){
+                                            break ;
+                                        }else{
+                                            printf("recv[%s]\n",err) ;
+                                            return err ;
+                                        }
+                                    }
+                                }
+                                return nil ;
+                            }() ;
+                        }
+                    }
+                }
+            }
+        }() ;
     }
     return errorf("Assert") ;
 }
 
+type TypeSyslogDaemon struct {
+    router *SyslogRouter ;
+} ;
+
 func SyslogDaemon(opts ... any) (error){
 
-    var router *SyslogRouter = nil ;
+    T := TypeSyslogDaemon{} ;
 
     addrListens := make([]string,0) ;
 
@@ -1136,43 +1314,54 @@ func SyslogDaemon(opts ... any) (error){
 
         switch(t){
             case "*BerdyshFrameworkGoLang.SyslogRouter":{
-                router = opt.(*SyslogRouter)
+                T.router = opt.(*SyslogRouter)
             }
             case "string":{
-                addrListens = append(addrListens,opt.(string)) ;
+                if(true){
+                    printf("Set[%s]\n",opt.(string)) ;
+                    addrListens = append(addrListens,opt.(string)) ;
+                }
             }
         }
     }
 
     if(len(addrListens) == 0){
         if(true){
-            addrListens = append(addrListens,"tcp://0.0.0.0:514") ;
-        }else{
             addrListens = append(addrListens,"unix:///dev/log") ;
+        }else{
+            addrListens = append(addrListens,"tcp://0.0.0.0:514") ;
+            addrListens = append(addrListens,"udp://0.0.0.0:514") ;
         }
+    }else{
+        printf("NumListen[%d]\n",len(addrListens)) ;
     }
 
-    for _,addrListen := range addrListens{
-        if err := SyslogDaemonNode(addrListen,router) ; (err != nil){
-            return err ;
-        }
+    for idx,addrListen := range addrListens{
+        printf("[%d][%s]\n",idx,addrListen) ;
     }
 
-    /// time.Sleep(1 * time.Second) ;
+    for idx,addrListen := range addrListens{
+        func(){
+            if err := T.SyslogDaemonNode(addrListen) ; (err != nil){
+                printf("%d:[%s]/err[%s]-1202\n",idx,addrListen,err) ;
+            }
+        }() ;
+    }
+
+    printf("Ready.\n") ;
+
+    time.Sleep(1 * time.Second) ;
 
     return nil ;
 }
 
 func SyslogServer(){
-    printf("St.\n") ;
 
     var router *SyslogRouter = NewSyslogRouter() ;
 
-    if err := SyslogDaemon(router) ; (err != nil){
-        printf("err[%s].\n",err) ;
+    if err := SyslogDaemon(router,"unix:///dev/log","tcp://0.0.0.0:514","udp://0.0.0.0:514") ; (err != nil){
+        printf("err[%s]-1217.\n",err) ;
     }
-    
-    printf("En.\n") ;
 }
 
 

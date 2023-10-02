@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <syslog.h>
+
+#if 0
 #include <syslog-ng.h>
 #include <syslog-ng/logwriter.h>
+#endif
 
 void    BySyslog(){
     openlog("ident", 0, LOG_LOCAL7) ;
@@ -11,6 +14,7 @@ void    BySyslog(){
     closelog() ;
 }
 
+#if 0
 void    BySyslogNg(){
     guint writer_flags = 0 ;
     LogWriter   *writer ;
@@ -39,13 +43,10 @@ void    BySyslogNg(){
     // queue = log_queue_fifo_new(1000, NULL, STATS_LEVEL0, NULL, NULL) ;
     // log_writer_set_queue(writer, queue) ;
 }
+#endif
 
 int main(){
-    if(1){
-        BySyslog() ;
-    }else{
-        BySyslogNg() ;
-    }
+    BySyslog() ;
     return 0 ;
 }
 
