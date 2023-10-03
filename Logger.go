@@ -607,21 +607,22 @@ type SyslogEntry struct {
     Facility    syslog.Priority ;
     Priority    syslog.Priority ;
 
-    Timestamp   string ;
-    Tag         string ;
-    AppName     string ;
-    Hostname    string ;
-    Msgid       string ;
-    Pid         int ;
-    Version     int ;
+    Timestamp       string ;
+    Tag             string ;
+    AppName         string ;
+    Hostname        string ;
+    MsgId           string ;
+    StructuredData  string ;
+    ProcId          string ;
+    Version         int ;
 
-    IsRFC3164   bool ;
-    IsRFC5424   bool ;
-    IsRFC6587   bool ;
+    IsRFC3164       bool ;
+    IsRFC5424       bool ;
+    IsRFC6587       bool ;
 
-    Message     string ;
+    Message         string ;
 
-    Handle      SyslogHandle ;
+    Handle          SyslogHandle ;
 }
 
 type SyslogHandle interface {
@@ -634,6 +635,13 @@ func NewSyslogEntry() (SyslogEntry){
 
     ret.Facility = -1 ;
     ret.Priority = -1 ;
+
+    ret.ProcId          = "-" ;
+    ret.Tag             = "-" ;
+    ret.AppName         = "-" ;
+    ret.Hostname        = "-" ;
+    ret.MsgId           = "-" ;
+    ret.StructuredData  = "-" ;
 
     ret.inited  = syslogEntryInitedRandom ;
 
@@ -653,7 +661,6 @@ func (this *SyslogRouter) Init() (*SyslogRouter){
 }
 
 func (this *SyslogRouter) Handle(entry SyslogEntry,handle SyslogHandle) (*SyslogRouter){
-
 
     entry.Handle = handle ;
 
@@ -789,7 +796,7 @@ func (this *TypeSyslogDaemon) EvLine(line []rune){
         printf("Timestamp[%s]\n",rc.Timestamp) ;
         printf("Hostname[%s]\n",rc.Hostname) ;
         printf("Tag[%s]\n",rc.Tag) ;
-        if(rc.Pid != 0){ printf("Pid[%d]\n",rc.Pid) ; }
+        printf("ProcId[%s]\n",rc.ProcId) ;
         printf("Message[%s]\n",rc.Message) ;
 
         this.SyslogRouting(&rc) ;
@@ -842,14 +849,19 @@ func ParseSyslogProtocolPri(rc *SyslogEntry){
 }
 
 func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
-    rc := SyslogEntry{} ;
+
+    rc := NewSyslogEntry() ;
+
     var err error = nil ; _ = err ;
 
     var mark_st rune = Ord("<") ;
     var mark_en rune = Ord(">") ;
 
+    token := make([]rune,0) ;
+
     prio := make([]rune,0) ;
     date := make([]rune,0) ;
+
     tag  := make([]rune,0) ;
     pid  := make([]rune,0) ;
     mes  := make([]rune,0) ;
@@ -903,16 +915,19 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
             }
             case 2:{
                 if(c == Ord("1") && c2 == Ord(" ")){ /* <123>1 */
-                    idx++ ;
-                    step = 20 ;
+                    idx += 2 ;
+                    step = 40 ;
+                    rc.IsRFC5424 = true ;
                 }else if((c >= Ord("A")) && (c <= Ord("Z"))){ /* Oct */
                     date = append(date,c) ;
                     idx++ ;
                     step = 10 ;
+                    rc.IsRFC3164 = true ;
                 }else if((c >= Ord("1")) && (c <= Ord("9"))){ /* 2023-10-02T08:18:35Z */
                     date = append(date,c) ;
                     idx++ ;
                     step = 5 ;
+                    rc.IsRFC3164 = true ;
                 }
             }
             case 5:{
@@ -976,12 +991,9 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
             }
             case 14:{
                 if(c == Ord("]")){
-                    if rc.Pid,err = strconv.Atoi(string(pid)) ; (err != nil){
-                        return rc,err ;
-                    }else{
-                        step = 17 ;
-                        idx++ ;
-                    }
+                    rc.ProcId = string(pid) ;
+                    step = 17 ;
+                    idx++ ;
                 }else{
                     pid = append(pid,c) ;
                     idx++ ;
@@ -1003,13 +1015,110 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
                     return rc,errorf("Broken-4[0x%02x]",c) ;
                 }
             }
-            case 20:{
-            }
 
             case 30:{
                 mes = append(mes,c) ;
                 idx++ ;
             }
+
+            case 40:{
+                if(c == Ord(" ")){
+                    rc.Timestamp = string(token) ;
+                    token = make([]rune,0) ;
+                    idx++ ;
+                    step += 1 ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 41:{
+                if(c == Ord(" ")){
+                    rc.Hostname = string(token) ;
+                    token = make([]rune,0) ;
+                    idx++ ;
+                    step += 1 ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 42:{
+                if(c == Ord(" ")){
+                    rc.AppName = string(token) ;
+                    token = make([]rune,0) ;
+                    idx++ ;
+                    step += 1 ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 43:{
+                if(c == Ord(" ")){
+                    rc.ProcId = string(token) ;
+                    token = make([]rune,0) ;
+                    idx++ ;
+                    step += 1 ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 44:{
+                if(c == Ord(" ")){
+                    rc.MsgId = string(token) ;
+                    token = make([]rune,0) ;
+                    idx++ ;
+                    step += 1 ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 45:{
+                if(c == Ord("-")){
+                    idx++ ;
+                    step = 47 ;
+                }else if(c == Ord("[")){
+                    step = 46 ;
+                }else{
+                    step = 49 ;
+                }
+            }
+
+            case 46:{
+                if((c == Ord("]")) && (c2 != Ord("["))){
+                    token = append(token,c) ;
+                    rc.StructuredData = string(token) ;
+                    token = make([]rune,0) ;
+                    step = 47 ;
+                    idx++ ;
+                }else{
+                    token = append(token,c) ;
+                    idx++ ;
+                }
+            }
+
+            case 47:{
+                if(c == Ord(" ")){
+                    step = 49 ;
+                    idx++ ;
+                }else{
+                    return rc,errorf("Broken(%c)-1111",c) ;
+                }
+            }
+
+            case 49:{
+                mes = append(mes,c) ;
+                idx++ ;
+            }
+
         }
     }
 
