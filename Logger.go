@@ -607,6 +607,8 @@ type SyslogEntry struct {
     Facility    syslog.Priority ;
     Priority    syslog.Priority ;
 
+    Date            time.Time ;
+
     Timestamp       string ;
     Tag             string ;
     AppName         string ;
@@ -808,6 +810,96 @@ func IsNumPri(r []rune) (int,error) {
     return strconv.Atoi(str) ;
 }
 
+func SyslogMon2Mon(mon string) (int){
+    switch(mon){
+        case "Jan":{ return 1 ; }
+        case "Feb":{ return 2 ; }
+        case "Mar":{ return 3 ; }
+        case "Apr":{ return 4 ; }
+        case "May":{ return 5 ; }
+        case "Jun":{ return 6 ; }
+        case "Jul":{ return 7 ; }
+        case "Aug":{ return 8 ; }
+        case "Sep":{ return 9 ; }
+        case "Oct":{ return 10 ; }
+        case "Nov":{ return 11 ; }
+        case "Dec":{ return 12 ; }
+    }
+    return 0 ;
+}
+
+// 2006-01-02T15:04:05
+
+func SyslogDate2Str(src string)(string){
+    var year int ;
+    var mon int ;
+    var mday int ;
+    var hour int ;
+    var min int ;
+    var sec int ;
+
+    if(len(src) == 15){
+        mon = SyslogMon2Mon(Substr(src,0,3)) ;
+        if(mon > 0){
+            now := time.Now() ;
+            year = now.Year()
+
+            if(Substr(src,4,1) == " "){
+                mday = Atoi(Substr(src,5,1)) ;
+            }else{
+                mday = Atoi(Substr(src,4,2)) ;
+            }
+
+            hour = Atoi(Substr(src,7,2)) ;
+            min = Atoi(Substr(src,10,2)) ;
+            sec = Atoi(Substr(src,13,2)) ;
+
+            return sprintf("%04d/%02d/%02d %02d:%02d:%02d",year,mon,mday,hour,min,sec) ;
+        }
+    }else{
+        if((len(src) >= 19) && (Substr(src,4,1) == "-") && (Substr(src,7,1) == "-") && (Substr(src,10,1) == "T")){
+            year = Atoi(Substr(src,0,4)) ;
+            mon  = Atoi(Substr(src,5,2)) ;
+            mday = Atoi(Substr(src,8,2)) ;
+
+            hour = Atoi(Substr(src,11,2)) ;
+            min = Atoi(Substr(src,14,2)) ;
+            sec = Atoi(Substr(src,17,2)) ;
+
+            if(len(src) >= 20){
+                xxx := Substr(src,19) ;
+                var x2 string ;
+                sz := len(xxx) ;
+                if(sz >= 1){
+                    z := Substr(xxx,-1) ;
+
+                    if(z == "Z"){
+                        x2 = Substr(xxx,0,(sz-1)) ;
+                    }else{
+                        x2 = xxx ;
+                    }
+
+                    printf("A-[%s]\n",xxx) ;
+                    printf("B-[%s]\n",x2) ;
+                }
+
+
+            }
+        }
+
+    }
+    return "BAD" ;
+}
+
+// 2006-01-02T15:04:05
+
+func ParseSyslogProtocolDate(rc *SyslogEntry) (error){
+
+    // printf("Timestamp[%s]\n",rc.Timestamp) ;
+
+    return nil ;
+}
+
 func ParseSyslogProtocolPri(rc *SyslogEntry){
 
     facilityN := rc.Pri / 8 ; _ = facilityN ;
@@ -933,6 +1025,7 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
             case 5:{
                 if(c == Ord(" ")){
                     rc.Timestamp = string(date) ;
+                    ParseSyslogProtocolDate(&rc) ;
                     step = 11 ;
                 }else{
                     date = append(date,c) ;
@@ -947,6 +1040,7 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
                 if(len(date) == 15){
                     // len("Oct  2 03:01:01") == 15
                     rc.Timestamp = string(date) ;
+                    ParseSyslogProtocolDate(&rc) ;
                     step = 11 ;
                 }
             }
@@ -1024,6 +1118,7 @@ func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
             case 40:{
                 if(c == Ord(" ")){
                     rc.Timestamp = string(token) ;
+                    ParseSyslogProtocolDate(&rc) ;
                     token = make([]rune,0) ;
                     idx++ ;
                     step += 1 ;

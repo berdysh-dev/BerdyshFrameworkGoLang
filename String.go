@@ -97,16 +97,14 @@ func Substr(args ... interface{}) string{
     if(num_args < 1){ return "" ; }
 
     str = Strval(args[0]) ;
-    str_len := len(str) ;
-    bin := []byte(str) ; _ = bin ;
+    r := []rune(str) ; _ = r ;
+    max := len(r) ; _ = max ;
 
     switch(num_args){
     case 2:{
-            str = Strval(args[0]) ;
             offset = Intval(args[1]) ;
         }
     case 3:{
-            str = Strval(args[0]) ;
             offset = Intval(args[1]) ;
             length = Intval(args[2]) ;
             is_length = true ;
@@ -114,16 +112,23 @@ func Substr(args ... interface{}) string{
     }
 
     if(offset < 0){
-        offset = 0 - offset ;
-        st = str_len - offset ;
+        length = 0 - offset ;
+        offset = max - length ;
+        return string(r[offset:(offset+length)]) ;
     }else{
         st = offset ;
     }
 
     if(is_length){
-        return string([]rune(str)[offset:(offset+length)]) ;
+        return string(r[offset:(offset+length)]) ;
     }else{
-        return string([]rune(str)[offset:]) ;
+        return string(r[offset:]) ;
     }
 }
+
+
+
+
+
+
 
