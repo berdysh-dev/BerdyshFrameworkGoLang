@@ -879,8 +879,7 @@ func SyslogDate2Str(src string)(string){
                         x2 = xxx ;
                     }
 
-                    printf("A-[%s]\n",xxx) ;
-                    printf("B-[%s]\n",x2) ;
+
                 }
 
 
