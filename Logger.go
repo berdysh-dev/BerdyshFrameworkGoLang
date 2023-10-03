@@ -171,7 +171,7 @@ func (this *Logger) Emerg_      (msg string, a ... any){ ; }
 func Debugf     (f string,a ... any){ DefaultLogger.Debugf      (f,a ...) ; }
 func Infof      (f string,a ... any){ DefaultLogger.Infof       (f,a ...) ; }
 func Warnf      (f string,a ... any){ DefaultLogger.Warnf       (f,a ...) ; }
-func Errorf     (f string,a ... any){ DefaultLogger.Errorf      (f,a ...) ; }
+func ErrorfLog  (f string,a ... any){ DefaultLogger.Errorf      (f,a ...) ; }
 func Noticef    (f string,a ... any){ DefaultLogger.Noticef     (f,a ...) ; }
 func Criticalf  (f string,a ... any){ DefaultLogger.Criticalf   (f,a ...) ; }
 func Alertf     (f string,a ... any){ DefaultLogger.Alertf      (f,a ...) ; }
@@ -180,7 +180,7 @@ func Emergf     (f string,a ... any){ DefaultLogger.Emergf      (f,a ...) ; }
 func Debugf_    (f string,a ... any){ ; }
 func Infof_     (f string,a ... any){ ; }
 func Warnf_     (f string,a ... any){ ; }
-func Errorf_    (f string,a ... any){ ; }
+func ErrorfLog_ (f string,a ... any){ ; }
 func Noticef_   (f string,a ... any){ ; }
 func Criticalf_ (f string,a ... any){ ; }
 func Emergf_    (f string,a ... any){ ; }
@@ -778,7 +778,7 @@ func (this *TypeSyslogDaemon) EvLine(line []rune){
 
     // printf("[%s]\n",string(line)) ;
 
-    if rc,err = parseSyslogProtocol(line) ; (err != nil){
+    if rc,err = ParseSyslogProtocol(line) ; (err != nil){
         printf("err[%s]\n",err) ;
     }else{
         printf("Pri[%d]\n",rc.Pri) ;
@@ -801,7 +801,7 @@ func IsNumPri(r []rune) (int,error) {
     return strconv.Atoi(str) ;
 }
 
-func parseSyslogProtocolPri(rc *SyslogEntry){
+func ParseSyslogProtocolPri(rc *SyslogEntry){
 
     facilityN := rc.Pri / 8 ; _ = facilityN ;
     priorityN := rc.Pri % 8 ; _ = priorityN ;
@@ -841,7 +841,7 @@ func parseSyslogProtocolPri(rc *SyslogEntry){
     }
 }
 
-func parseSyslogProtocol(line []rune) (SyslogEntry,error){
+func ParseSyslogProtocol(line []rune) (SyslogEntry,error){
     rc := SyslogEntry{} ;
     var err error = nil ; _ = err ;
 
@@ -893,7 +893,7 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
                     if(err != nil){
                         return rc,err ;
                     }else{
-                        parseSyslogProtocolPri(&rc) ;
+                        ParseSyslogProtocolPri(&rc) ;
                         step = 2 ;
                     }
                 }else{
@@ -954,6 +954,7 @@ func parseSyslogProtocol(line []rune) (SyslogEntry,error){
                     step = 14 ;
                     idx++ ;
                     rc.Tag = string(tag) ;
+                    tag = make([]rune,0) ;
                     flagTag = true ;
                 }else if(c == Ord(" ")){
                     if(flagHostname != false){

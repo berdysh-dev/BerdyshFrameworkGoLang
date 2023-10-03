@@ -38,11 +38,11 @@ func simple(){
 
 func main(){
     fmt.Printf("St.\n")
-    if(true){
+    if(false){
         simple() ;
     }else{
-        unix() ;
-        dial("tcp") ;
+        // unix() ;
+        // dial("tcp") ;
         dial("udp") ;
     }
     fmt.Printf("Fin.\n")

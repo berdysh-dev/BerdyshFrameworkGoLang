@@ -13,6 +13,7 @@ func Sprintf(f string, args ...any) (string) { return fmt.Sprintf(f,args ...) ; 
 func sprintf(f string, args ...any) (string) { return fmt.Sprintf(f,args ...) ; }
 
 func errorf(f string, args ...any) (error) { return fmt.Errorf(f,args ...) ; }
+func Errorf(f string, args ...any) (error) { return fmt.Errorf(f,args ...) ; }
 
 func    StdioTest(){
 
