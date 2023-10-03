@@ -15,6 +15,7 @@ import (
     "go.uber.org/zap"
     "net"
     "time"
+    "sync"
 _   "regexp"
 _   "strconv"
 _   "reflect"
@@ -592,12 +593,15 @@ const (
     SOCKET_LOG  = "/dev/log"
 )
 
-type SyslogHandle interface {
-    EvRecv(rc *SyslogEntry) ;
-    GetId() (string) ;
-}
+type syslogEntryInited  int ;
+
+const (
+    syslogEntryInitedRandom = 432271
+)
 
 type SyslogEntry struct {
+
+    inited      syslogEntryInited ;
 
     Pri         int ;
     Facility    syslog.Priority ;
@@ -620,6 +624,21 @@ type SyslogEntry struct {
     Handle      SyslogHandle ;
 }
 
+type SyslogHandle interface {
+    EvRecv(rc *SyslogEntry) ;
+    GetId() (string) ;
+}
+
+func NewSyslogEntry() (SyslogEntry){
+    ret := SyslogEntry{} ;
+
+    ret.Facility = -1 ;
+    ret.Priority = -1 ;
+
+    ret.inited  = syslogEntryInitedRandom ;
+
+    return ret ;
+}
 
 type SyslogRouter struct {
     Err         error ;
@@ -635,6 +654,7 @@ func (this *SyslogRouter) Init() (*SyslogRouter){
 
 func (this *SyslogRouter) Handle(entry SyslogEntry,handle SyslogHandle) (*SyslogRouter){
 
+
     entry.Handle = handle ;
 
     id := handle.GetId()
@@ -642,10 +662,16 @@ func (this *SyslogRouter) Handle(entry SyslogEntry,handle SyslogHandle) (*Syslog
     if(id == ""){
         this.Err = errorf("Id [%s] is empty.",id) ;
     }else{
-        if _, ok := this.Entrys[id]; ok {
-            this.Err = errorf("Id [%s] exists",id) ;
+        if(entry.inited != syslogEntryInitedRandom){
+            this.Err = errorf("Id [%s] not NewSyslogEntry(%d:%d).",id,entry.inited , syslogEntryInitedRandom) ;
+
+
         }else{
-            this.Entrys[id] = entry ;
+            if _, ok := this.Entrys[id]; ok {
+                this.Err = errorf("Id [%s] exists",id) ;
+            }else{
+                this.Entrys[id] = entry ;
+            }
         }
     }
 
@@ -1273,7 +1299,8 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
             }
         }() ;
     }
-    return errorf("Assert") ;
+    return nil ;
+    // return errorf("Assert(%s)-1302",netDial) ;
 }
 
 type TypeSyslogDaemon struct {
@@ -1320,7 +1347,7 @@ func SyslogDaemon(opts ... any) (error){
     for idx,addrListen := range addrListens{
         func(){
             if err := T.SyslogDaemonNode(addrListen) ; (err != nil){
-                printf("%d:[%s]/err[%s]-1202\n",idx,addrListen,err) ;
+                printf("%d:[%s]/err[%s]-1349\n",idx,addrListen,err) ;
             }
         }() ;
     }
@@ -1332,21 +1359,21 @@ func SyslogDaemon(opts ... any) (error){
     return nil ;
 }
 
-type HandleLocal4 struct { Id  string ; } ;
-type HandleLocal5 struct { Id  string ; } ;
-type HandleLocal6 struct { Id  string ; } ;
-type HandleLocal7 struct { Id  string ; } ;
+type HandlerLocal4 struct { Id  string ; mu sync.Mutex ; } ;
+type HandlerLocal5 struct { Id  string ; mu sync.Mutex ; } ;
+type HandlerLocal6 struct { Id  string ; mu sync.Mutex ; } ;
+type HandlerLocal7 struct { Id  string ; mu sync.Mutex ; } ;
 
-func (this *HandleLocal4) GetId() (string){ return this.Id ; }
-func (this *HandleLocal5) GetId() (string){ return this.Id ; }
-func (this *HandleLocal6) GetId() (string){ return this.Id ; }
-func (this *HandleLocal7) GetId() (string){ return this.Id ; }
+func (this *HandlerLocal4) GetId() (string){ return this.Id ; }
+func (this *HandlerLocal5) GetId() (string){ return this.Id ; }
+func (this *HandlerLocal6) GetId() (string){ return this.Id ; }
+func (this *HandlerLocal7) GetId() (string){ return this.Id ; }
 
-func (this *HandleLocal4) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
-func (this *HandleLocal5) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
-func (this *HandleLocal6) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+func (this *HandlerLocal4) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+func (this *HandlerLocal5) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
+func (this *HandlerLocal6) EvRecv(rc *SyslogEntry){ printf("[%s]\n",this.Id) ; }
 
-func (this *HandleLocal7) EvRecv(rc *SyslogEntry){
+func (this *HandlerLocal7) EvRecv(rc *SyslogEntry){
     printf("[%s]\n",this.Id) ;
     printf("\n%s\n",Hexdump(rc.Message)) ;
 }
@@ -1355,10 +1382,20 @@ func SyslogServer(){
 
     var router *SyslogRouter = NewSyslogRouter() ;
 
-    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL4 } ,&HandleLocal7{Id: "local4"}) ;
-    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL5 } ,&HandleLocal7{Id: "local5"}) ;
-    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL6 } ,&HandleLocal7{Id: "local6"}) ;
-    router.Handle(SyslogEntry{ Facility: syslog.LOG_LOCAL7 } ,&HandleLocal7{Id: "local7"}) ;
+    EntryLocal4 := NewSyslogEntry() ;
+    EntryLocal5 := NewSyslogEntry() ;
+    EntryLocal6 := NewSyslogEntry() ;
+    EntryLocal7 := NewSyslogEntry() ;
+
+    EntryLocal4.Facility = syslog.LOG_LOCAL4 ;
+    EntryLocal5.Facility = syslog.LOG_LOCAL5 ;
+    EntryLocal6.Facility = syslog.LOG_LOCAL6 ;
+    EntryLocal7.Facility = syslog.LOG_LOCAL7 ;
+
+    router.Handle(EntryLocal4,&HandlerLocal4{Id: "local4"}) ;
+    router.Handle(EntryLocal5,&HandlerLocal5{Id: "local5"}) ;
+    router.Handle(EntryLocal6,&HandlerLocal6{Id: "local6"}) ;
+    router.Handle(EntryLocal7,&HandlerLocal7{Id: "local7"}) ;
 
     if err := SyslogDaemon(router,"unix:///dev/log","tcp://0.0.0.0:514","udp://0.0.0.0:514") ; (err != nil){
         printf("err[%s]-1217.\n",err) ;
