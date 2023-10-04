@@ -1744,6 +1744,31 @@ func (this *HandlerLocal) EvRecv(rc *SyslogEntry){
     }
 }
 
+const (
+    LOG_PERROR      = 32 ;
+    LOG_NDELAY      = 8 ;
+    LOG_ODELAY      = 4 ;
+    LOG_CONS        = 2 ;
+    LOG_PID         = 1 ;
+)
+
+type TypeSyslog struct {
+    Prefix      string ;
+    Flags       int ;
+    Facility    int ;
+}
+
+func OpenSyslog(prefix string,flags int,facility int) (*TypeSyslog){
+    ret := TypeSyslog{} ;
+    return &ret ;
+}
+
+func (this *TypeSyslog) Syslog(lv int,format string,args ... any){
+}
+
+func (this *TypeSyslog) Close(){
+}
+
 func TestSyslogServer(){
 
     var router *SyslogRouter = NewSyslogRouter() ;

@@ -177,8 +177,33 @@ func (this *TypeDirIterator) CurrentDirEntry() (TypeDirEntry){
     return ret ;
 }
 
+type TypePathInfo struct {
+    Dirname     string ;
+    Basename    string ;
+    Extension   string ;
+    Filename    string ;
+}
 
+func PathInfo(path string) (TypePathInfo){
+    ret := TypePathInfo{} ;
+    return ret ;
+}
 
+type TypeParseUrl struct {
+    Scheme      string ;
+    Host        string ;
+    Port        string ;
+    User        string ;
+    Pass        string ;
+    Path        string ;
+    Query       string ;
+    Fragment    string ;
+}
+
+func ParseUrl(url string) (TypeParseUrl){
+    ret := TypeParseUrl{} ;
+    return ret ;
+}
 
 
 
