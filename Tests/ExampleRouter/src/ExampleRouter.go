@@ -422,13 +422,14 @@ func cb_log (severity string,message string){
 func    Test() {
 
     time.Sleep(1 * time.Second) ;
-
     xlog.XWriterSyslog.Setter(xlog.XWriter{SyslogFacility: syslog.LOG_LOCAL7,SyslogAddr: "unix:///dev/log"}) ;
-
     logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ;
     xlog.SetDefault(logger1) ;
+
     slog.Debug("Debug") ;
     slog.Info("Info","aaa","123") ;
+
+    log.Printf("[%d][%s][%d]",1,"あいうえお",3) ;
 }
 
 func    Entry() {

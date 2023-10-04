@@ -442,7 +442,8 @@ func slogLevel2SyslogSeverity(level any) (syslog.Priority){
 }
 
 func (this *XWriter) WriteSyslog(p []byte) (n int, err error){
-    printf("[%s:%d:%d][%s]-427\n",this.SyslogAddr,this.SyslogFacility,this.SyslogSeverity,Trim(string(p))) ;
+
+    // printf("[%s:%d:%d][%s]-427\n",this.SyslogAddr,this.SyslogFacility,this.SyslogSeverity,Trim(string(p))) ;
 
     network := "unix" ;
     addr := "/dev/log" ;
@@ -1738,7 +1739,7 @@ func (this *HandlerLocal) EvRecv(rc *SyslogEntry){
         printf("[%s]\n",this.Id) ;
         printf("\n%s\n",Hexdump(rc.Message)) ;
     }else{
-        printf("[%s.%s][%s][%s]\n",SyslogFacility2str(rc.Facility),SyslogSeverity2str(rc.Severity),this.Id,rc.Message) ;
+        printf("%s.%s:%s\n",SyslogFacility2str(rc.Facility),SyslogSeverity2str(rc.Severity),rc.Message) ;
     }
 }
 
