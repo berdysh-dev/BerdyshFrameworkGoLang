@@ -1,7 +1,7 @@
 package ExampleRouter
 
 import (
-_   "io"
+    "io"
 _   "os"
     "flag"
     "fmt"
@@ -432,10 +432,28 @@ func    InitLogger() {
 
     scriptLet := X.NewScriptLet() ;
 
-    if err := scriptLet.Do("whoami").Error() ; (err != nil){
+    cmd := "/usr/local/bin/ScriptLetTest.sh" ; _ = cmd ;
+
+    if err := scriptLet.Do(cmd,"127.0.0.1").Error() ; (err != nil){
         log.Printf("err[%s]",err) ;
     }else{
-        logger.Debugf("OK[%d]",321) ;
+        logger.Debugf("Start[]") ;
+        for{
+            if err := scriptLet.Proc() ; (err != nil){
+                if(err != io.EOF){
+                    logger.Debugf("err[%s]",err) ;
+                }else{
+                    logger.Debugf("err[%s]",err) ;
+                }
+                break ;
+            }
+        }
+
+        for idx,line := range scriptLet.Lines{
+            logger.Debugf("[%d][%d][%s]",idx,line.Fd,line.S) ;
+        }
+
+        logger.Debugf("Fin.") ;
     }
 }
 
