@@ -88,9 +88,7 @@ func (this *Logger) Log(level slog.Level,msg string,a ... any){
 func IsPathGOROOT(path string) bool{
     p2,ok := os.LookupEnv("GOROOT") ;
     if(ok){
-
-        printf("p2[%V]",p2) ;
-
+        // printf("p2[%V]",p2) ;
         a := strings.Split(p2,      "/") ;
         b := strings.Split(path,    "/") ;
         for idx,_ := range a{
@@ -167,6 +165,9 @@ func (this *Logger) Notice_     (msg string, a ... any){ ; }
 func (this *Logger) Critical_   (msg string, a ... any){ ; }
 func (this *Logger) Alert_      (msg string, a ... any){ ; }
 func (this *Logger) Emerg_      (msg string, a ... any){ ; }
+
+func debugf     (f string,a ... any){ DefaultLogger.Debugf      (f,a ...) ; }
+func debugf_    (f string,a ... any){  ; }
 
 func Debugf     (f string,a ... any){ DefaultLogger.Debugf      (f,a ...) ; }
 func Infof      (f string,a ... any){ DefaultLogger.Infof       (f,a ...) ; }

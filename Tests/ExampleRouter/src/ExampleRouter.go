@@ -419,17 +419,24 @@ func cb_log (severity string,message string){
     fmt.Printf("severity[%s]/msg[%s]\n",severity,message) ;
 } ;
 
-func    Test() {
+func    InitLogger() {
 
     time.Sleep(1 * time.Second) ;
     xlog.XWriterSyslog.Setter(xlog.XWriter{SyslogFacility: syslog.LOG_LOCAL7,SyslogAddr: "unix:///dev/log"}) ;
-    logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ;
-    xlog.SetDefault(logger1) ;
+    logger := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ;
+    xlog.SetDefault(logger) ;
 
-    slog.Debug("Debug") ;
-    slog.Info("Info","aaa","123") ;
+    // slog.Debug("Debug") ;
+    // slog.Info("Info","aaa","123") ;
+    // log.Printf("[%d][%s][%d]",1,"あいうえお",3) ;
 
-    log.Printf("[%d][%s][%d]",1,"あいうえお",3) ;
+    scriptLet := X.NewScriptLet() ;
+
+    if err := scriptLet.Do("whoami").Error() ; (err != nil){
+        log.Printf("err[%s]",err) ;
+    }else{
+        logger.Debugf("OK[%d]",321) ;
+    }
 }
 
 func    Entry() {
@@ -451,7 +458,7 @@ func    Entry() {
     if(false){ EntryIris(addr) ; }
     if(false){ EntryVanilla(addr) ; }
 
-    if(true){ Test() ; }
+    if(true){ InitLogger() ; }
 
     if(true){ X.Tick() ; }
 }
