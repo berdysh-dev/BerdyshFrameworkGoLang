@@ -5,7 +5,7 @@ _   "io"
 _   "os"
     "flag"
     "fmt"
-_   "time"
+    "time"
     "log"
     "log/syslog"
     "net/http"
@@ -420,18 +420,15 @@ func cb_log (severity string,message string){
 } ;
 
 func    Test() {
+
+    time.Sleep(1 * time.Second) ;
+
     xlog.XWriterSyslog.Setter(xlog.XWriter{SyslogFacility: syslog.LOG_LOCAL7,SyslogAddr: "unix:///dev/log"}) ;
-    xlog.XWriterHook.Setter(xlog.XWriter{FuncOutput: func(opts ... any){ fmt.Printf("CB>>> %s\n",opts[0].(string)) ;}}) ;
 
-    xlog.XWriterGoogleCloudLogging.Setter(xlog.XWriterOptionGoogleCloudLogging{}) ;
-
-    logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog                ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger1 ;
-    logger2 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterHook                  ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ; _ = logger2 ;
-    logger3 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterGoogleCloudLogging    ,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlogGoogleCloudLogging})) ; _ = logger3 ;
-
-    xlog.SetDefault(logger3) ;
-
+    logger1 := xlog.NewLogger(xlog.NewJSONHandler(xlog.XWriterSyslog,&xlog.HandlerOptions{AddSource: false,ReplaceAttr: xlog.ReplaceAttrSlog})) ;
+    xlog.SetDefault(logger1) ;
     slog.Debug("Debug") ;
+    slog.Info("Info","aaa","123") ;
 }
 
 func    Entry() {
@@ -439,8 +436,7 @@ func    Entry() {
     addr := ":9005" ;
 
 
-    if(true){ go X.SyslogServer() ; }
-    if(true){ X.Tick() ; }
+    if(true){ go X.TestSyslogServer() ; }
 
     if(false){ EntryGin(addr) ; }
     if(false){ EntryGorilla(addr) ; }
@@ -454,8 +450,9 @@ func    Entry() {
     if(false){ EntryIris(addr) ; }
     if(false){ EntryVanilla(addr) ; }
 
-    if(false){ Test() ; }
+    if(true){ Test() ; }
 
+    if(true){ X.Tick() ; }
 }
 
 
