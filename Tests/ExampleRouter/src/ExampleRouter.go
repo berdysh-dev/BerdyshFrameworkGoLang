@@ -8,6 +8,7 @@ _   "os"
     "time"
     "log"
     "log/syslog"
+    "path/filepath"
     "net/http"
 )
 
@@ -430,30 +431,51 @@ func    InitLogger() {
     // slog.Info("Info","aaa","123") ;
     // log.Printf("[%d][%s][%d]",1,"あいうえお",3) ;
 
-    scriptLet := X.NewScriptLet() ;
+    if(false){
 
-    cmd := "/usr/local/bin/ScriptLetTest.sh" ; _ = cmd ;
+        scriptLet := X.NewScriptLet() ;
 
-    if err := scriptLet.Do(cmd,"127.0.0.1").Error() ; (err != nil){
-        log.Printf("err[%s]",err) ;
-    }else{
-        logger.Debugf("Start[]") ;
-        for{
-            if err := scriptLet.Proc() ; (err != nil){
-                if(err != io.EOF){
-                    logger.Debugf("err[%s]",err) ;
-                }else{
-                    logger.Debugf("err[%s]",err) ;
+        cmd := "/usr/local/bin/ScriptLetTest.sh" ; _ = cmd ;
+
+        if err := scriptLet.Do(cmd,"127.0.0.1").Error() ; (err != nil){
+            log.Printf("err[%s]",err) ;
+        }else{
+            logger.Debugf("Start[]") ;
+            for{
+                if err := scriptLet.Proc() ; (err != nil){
+                    if(err != io.EOF){
+                        logger.Debugf("err[%s]",err) ;
+                    }else{
+                        logger.Debugf("err[%s]",err) ;
+                    }
+                    break ;
                 }
-                break ;
+            }
+
+            for idx,line := range scriptLet.Lines{
+                logger.Debugf("[%d][%d][%s]",idx,line.Fd,line.S) ;
+            }
+
+            logger.Debugf("Fin.") ;
+        }
+    }
+
+    dir := "/home" ;
+
+    if dh,err := X.Opendir(dir) ; (err != nil){
+        X.Debugf("err[%s]\n",err) ;
+    }else{
+        defer dh.Close() ;
+        for i := dh.Iterator() ; i.HasNext() ; i.Next(){
+            ent := i.CurrentDirEntry() ;
+            if st,err := X.Stat(filepath.Join(dir,ent.Filename)) ; (err != nil){
+
+                X.Debugf("[%s][%s]",err,ent.Filename) ;
+            }else{
+                _ = st ;
+                X.Debugf("[OK][%d][%s]",st.Mtime,ent.Filename) ;
             }
         }
-
-        for idx,line := range scriptLet.Lines{
-            logger.Debugf("[%d][%d][%s]",idx,line.Fd,line.S) ;
-        }
-
-        logger.Debugf("Fin.") ;
     }
 }
 

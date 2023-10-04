@@ -104,7 +104,7 @@ func (this *ScriptLet) Proc() (error){
 
     if(this.SecTimeout > 0){
         go func(){
-            time.Sleep(this.SecTimeout * time.Second) ;
+            time.Sleep((time.Duration)(this.SecTimeout) * time.Second) ;
             chanTimeout <- true ;
         }() ;
     }

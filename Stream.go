@@ -5,6 +5,8 @@ import (
     "errors"
     "io/fs"
     "io/ioutil"
+_   "path/filepath"
+
 //    "log"
 )
 
@@ -95,8 +97,85 @@ func Stat(path string) (TypeStat,error) {
     return ret , err ;
 }
 
+type TypeDir struct {
+    Path    string ;
 
+    Files   []fs.FileInfo ;
+}
 
+type TypeDirIterator struct {
+    Dir *TypeDir ;
+
+    Idx int ;
+    Max int ;
+}
+
+type TypeDirEntry struct {
+    Filename    string ;
+    Size        int64 ;
+    Mtime       int64 ;
+    Mode        int64 ;
+    IsDir       bool ;
+}
+
+func Opendir(path string) (*TypeDir,error){
+    var err error ;
+    ret := TypeDir{} ;
+    ret.Path = path ;
+
+    if ret.Files, err = ioutil.ReadDir(path) ; (err != nil){
+        return &ret,err ;
+    }
+
+    return &ret,nil ;
+}
+
+func (this *TypeDir) Close(){
+    debugf("DIR CLOSE") ;
+}
+
+func (this *TypeDir) NewDirEntry() (*TypeDirEntry){
+    ret := TypeDirEntry{} ;
+    return &ret ;
+}
+
+func (this *TypeDir) Iterator(opts ... interface{}) (*TypeDirIterator){
+    ret := TypeDirIterator{};
+
+    ret.Dir = this ;
+    ret.Idx = 0 ;
+    ret.Max = len(ret.Dir.Files) ;
+
+    return &ret ;
+}
+
+func (this *TypeDirIterator) HasNext(opts ... any) bool{
+    if(this.Idx < this.Max){
+        return true ;
+    }else{
+        return false ;
+    }
+}
+
+func (this *TypeDirIterator) Next() (any, error){
+    this.Idx += 1 ;
+    return nil,nil ;
+}
+
+func (this *TypeDirIterator) CurrentDirEntry() (TypeDirEntry){
+    ret := TypeDirEntry{} ;
+
+    var x fs.FileInfo ; _ = x ;
+    x = this.Dir.Files[this.Idx] ;
+
+    ret.Filename    = x.Name() ;
+    ret.IsDir       = x.IsDir() ;
+    ret.Size        = x.Size() ;
+    ret.Mode        = (int64)(x.Mode()) ;
+    ret.Mtime       = x.ModTime().Unix() ;
+
+    return ret ;
+}
 
 
 
