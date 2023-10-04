@@ -1719,31 +1719,6 @@ func SyslogDaemon(opts ... any) (error){
     return nil ;
 }
 
-type HandlerLocal struct {
-    Id  string ;
-    mu sync.Mutex ;
-    inited bool ;
-} ;
-
-func (this *HandlerLocal) GetId() (string){ return this.Id ; }
-
-func (this *HandlerLocal) Init(){
-    this.inited = true ;
-}
-
-func (this *HandlerLocal) IsInited() (bool){
-    return this.inited ;
-}
-
-func (this *HandlerLocal) EvRecv(rc *SyslogEntry){
-    if(false){
-        printf("[%s]\n",this.Id) ;
-        printf("\n%s\n",Hexdump(rc.Message)) ;
-    }else{
-        printf("%s.%s:%s\n",SyslogFacility2str(rc.Facility),SyslogSeverity2str(rc.Severity),rc.Message) ;
-    }
-}
-
 const (
     LOG_PERROR      = 32 ;
     LOG_NDELAY      = 8 ;
@@ -1769,6 +1744,31 @@ func (this *TypeSyslog) Syslog(lv int,format string,args ... any){
 func (this *TypeSyslog) Close(){
 }
 
+type HandlerLocal struct {
+    Id  string ;
+    inited bool ;
+    mu sync.Mutex ;
+} ;
+
+func (this *HandlerLocal) GetId() (string){ return this.Id ; }
+
+func (this *HandlerLocal) Init(){
+    this.inited = true ;
+}
+
+func (this *HandlerLocal) IsInited() (bool){
+    return this.inited ;
+}
+
+func (this *HandlerLocal) EvRecv(rc *SyslogEntry){
+    if(false){
+        printf("[%s]\n",this.Id) ;
+        printf("\n%s\n",Hexdump(rc.Message)) ;
+    }else{
+        printf("%03d:%s.%s:%s:\n",runtime.NumGoroutine(),SyslogFacility2str(rc.Facility),SyslogSeverity2str(rc.Severity),rc.Message) ;
+    }
+}
+
 func TestSyslogServer(){
 
     var router *SyslogRouter = NewSyslogRouter() ;
@@ -1781,6 +1781,8 @@ func TestSyslogServer(){
 
     router.Handle(entry,&handler3) ;
     entry.Severity = syslog.LOG_ERR ; router.Handle(entry,&handler4) ;
+
+    entry = NewSyslogEntry() ;
 
     entry.Facility = syslog.LOG_LOCAL0 ; router.Handle(entry,&handler) ;
     entry.Facility = syslog.LOG_LOCAL1 ; router.Handle(entry,&handler) ;
