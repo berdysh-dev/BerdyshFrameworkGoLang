@@ -46,6 +46,42 @@ const (
     EMERGENCY   = "EMERGENCY"
 )
 
+const (
+    LOG_KERN        = syslog.LOG_KERN
+    LOG_USER        = syslog.LOG_USER
+    LOG_MAIL        = syslog.LOG_MAIL
+    LOG_DAEMON      = syslog.LOG_DAEMON
+    LOG_AUTH        = syslog.LOG_AUTH
+    LOG_SYSLOG      = syslog.LOG_SYSLOG
+    LOG_LPR         = syslog.LOG_LPR
+    LOG_NEWS        = syslog.LOG_NEWS
+    LOG_UUCP        = syslog.LOG_UUCP
+    LOG_CRON        = syslog.LOG_CRON
+    LOG_AUTHPRIV    = syslog.LOG_AUTHPRIV
+    LOG_FTP         = syslog.LOG_FTP
+    LOG_LOCAL0      = syslog.LOG_LOCAL0
+    LOG_LOCAL1      = syslog.LOG_LOCAL1
+    LOG_LOCAL2      = syslog.LOG_LOCAL2
+    LOG_LOCAL3      = syslog.LOG_LOCAL3
+    LOG_LOCAL4      = syslog.LOG_LOCAL4
+    LOG_LOCAL5      = syslog.LOG_LOCAL5
+    LOG_LOCAL6      = syslog.LOG_LOCAL6
+    LOG_LOCAL7      = syslog.LOG_LOCAL7
+
+    LOG_EMERG       = syslog.LOG_EMERG
+    LOG_ALERT       = syslog.LOG_ALERT
+    LOG_CRIT        = syslog.LOG_CRIT
+    LOG_ERR         = syslog.LOG_ERR
+    LOG_WARNING     = syslog.LOG_WARNING
+    LOG_NOTICE      = syslog.LOG_NOTICE
+    LOG_INFO        = syslog.LOG_INFO
+    LOG_DEBUG       = syslog.LOG_DEBUG
+)
+
+type Priority syslog.Priority ;
+type Facility syslog.Priority ;
+type Severity syslog.Priority ;
+
 type Value struct {
 }
 
@@ -428,14 +464,14 @@ func slogLevel2SyslogSeverity(level any) (syslog.Priority){
 
     if(sprintf("%T",level) == "string"){
         switch(level.(string)){
-            case DEBUG:{ return syslog.LOG_DEBUG ; }
-            case INFO:{ return syslog.LOG_INFO ; }
-            case NOTICE:{ return syslog.LOG_NOTICE ; }
-            case WARNING:{ return syslog.LOG_WARNING ; }
-            case ERROR:{ return syslog.LOG_ERR ; }
-            case CRITICAL:{ return syslog.LOG_CRIT ; }
-            case ALERT:{ return syslog.LOG_ALERT ; }
-            case EMERGENCY:{ return syslog.LOG_EMERG ; }
+            case DEBUG      :{ return LOG_DEBUG ; }
+            case INFO       :{ return LOG_INFO ; }
+            case NOTICE     :{ return LOG_NOTICE ; }
+            case WARNING    :{ return LOG_WARNING ; }
+            case ERROR      :{ return LOG_ERR ; }
+            case CRITICAL   :{ return LOG_CRIT ; }
+            case ALERT      :{ return LOG_ALERT ; }
+            case EMERGENCY  :{ return LOG_EMERG ; }
             default:{ printf("!!![%s]\n",level.(string)) ; }
         }
     }
@@ -992,26 +1028,26 @@ func ParseSyslogProtocolDate(rc *SyslogEntry) (error){
 func SyslogFacility2str(facility syslog.Priority) (string){
     ret := "***" ;
     switch(facility){
-        case syslog.LOG_KERN    :{ ret = "KERN" ; }
-        case syslog.LOG_USER    :{ ret = "USER" ; }
-        case syslog.LOG_MAIL    :{ ret = "MAIL" ; }
-        case syslog.LOG_DAEMON  :{ ret = "DAEMON" ; }
-        case syslog.LOG_AUTH    :{ ret = "AUTH" ; }
-        case syslog.LOG_SYSLOG  :{ ret = "SYSLOG" ; }
-        case syslog.LOG_LPR     :{ ret = "LPR" ; }
-        case syslog.LOG_NEWS    :{ ret = "NEWS" ; }
-        case syslog.LOG_UUCP    :{ ret = "UUCP" ; }
-        case syslog.LOG_CRON    :{ ret = "CRON" ; }
-        case syslog.LOG_AUTHPRIV:{ ret = "AUTHPRIV" ; }
-        case syslog.LOG_FTP     :{ ret = "FTP" ; }
-        case syslog.LOG_LOCAL0  :{ ret = "LOCAL0" ; }
-        case syslog.LOG_LOCAL1  :{ ret = "LOCAL1" ; }
-        case syslog.LOG_LOCAL2  :{ ret = "LOCAL2" ; }
-        case syslog.LOG_LOCAL3  :{ ret = "LOCAL3" ; }
-        case syslog.LOG_LOCAL4  :{ ret = "LOCAL4" ; }
-        case syslog.LOG_LOCAL5  :{ ret = "LOCAL5" ; }
-        case syslog.LOG_LOCAL6  :{ ret = "LOCAL6" ; }
-        case syslog.LOG_LOCAL7  :{ ret = "LOCAL7" ; }
+        case LOG_KERN    :{ ret = "KERN" ; }
+        case LOG_USER    :{ ret = "USER" ; }
+        case LOG_MAIL    :{ ret = "MAIL" ; }
+        case LOG_DAEMON  :{ ret = "DAEMON" ; }
+        case LOG_AUTH    :{ ret = "AUTH" ; }
+        case LOG_SYSLOG  :{ ret = "SYSLOG" ; }
+        case LOG_LPR     :{ ret = "LPR" ; }
+        case LOG_NEWS    :{ ret = "NEWS" ; }
+        case LOG_UUCP    :{ ret = "UUCP" ; }
+        case LOG_CRON    :{ ret = "CRON" ; }
+        case LOG_AUTHPRIV:{ ret = "AUTHPRIV" ; }
+        case LOG_FTP     :{ ret = "FTP" ; }
+        case LOG_LOCAL0  :{ ret = "LOCAL0" ; }
+        case LOG_LOCAL1  :{ ret = "LOCAL1" ; }
+        case LOG_LOCAL2  :{ ret = "LOCAL2" ; }
+        case LOG_LOCAL3  :{ ret = "LOCAL3" ; }
+        case LOG_LOCAL4  :{ ret = "LOCAL4" ; }
+        case LOG_LOCAL5  :{ ret = "LOCAL5" ; }
+        case LOG_LOCAL6  :{ ret = "LOCAL6" ; }
+        case LOG_LOCAL7  :{ ret = "LOCAL7" ; }
     }
     return ret ;
 }
@@ -1019,15 +1055,14 @@ func SyslogFacility2str(facility syslog.Priority) (string){
 func SyslogSeverity2str(severity syslog.Priority) (string){
     ret := "***" ;
     switch(severity){
-        case syslog.LOG_EMERG   :{ ret = "EMERG" ; }
-        case syslog.LOG_ALERT   :{ ret = "ALERT" ; }
-        case syslog.LOG_CRIT    :{ ret = "CRIT" ; }
-        case syslog.LOG_ERR     :{ ret = "ERR" ; }
-        case syslog.LOG_WARNING :{ ret = "WARNING" ; }
-        case syslog.LOG_NOTICE  :{ ret = "NOTICE" ; }
-        case syslog.LOG_INFO    :{ ret = "INFO" ; }
-        case syslog.LOG_DEBUG   :{ ret = "DEBUG" ; }
-
+        case LOG_EMERG   :{ ret = "EMERG" ; }
+        case LOG_ALERT   :{ ret = "ALERT" ; }
+        case LOG_CRIT    :{ ret = "CRIT" ; }
+        case LOG_ERR     :{ ret = "ERR" ; }
+        case LOG_WARNING :{ ret = "WARNING" ; }
+        case LOG_NOTICE  :{ ret = "NOTICE" ; }
+        case LOG_INFO    :{ ret = "INFO" ; }
+        case LOG_DEBUG   :{ ret = "DEBUG" ; }
     }
     return ret ;
 }
@@ -1038,37 +1073,37 @@ func ParseSyslogProtocolPri(rc *SyslogEntry){
     priorityN := rc.Pri % 8 ; _ = priorityN ;
 
     switch(facilityN){
-        case 0:{ rc.Facility = syslog.LOG_KERN ; }
-        case 1:{ rc.Facility = syslog.LOG_USER ; }
-        case 2:{ rc.Facility = syslog.LOG_MAIL ; }
-        case 3:{ rc.Facility = syslog.LOG_DAEMON ; }
-        case 4:{ rc.Facility = syslog.LOG_AUTH ; }
-        case 5:{ rc.Facility = syslog.LOG_SYSLOG ; }
-        case 6:{ rc.Facility = syslog.LOG_LPR ; }
-        case 7:{ rc.Facility = syslog.LOG_NEWS ; }
-        case 8:{ rc.Facility = syslog.LOG_UUCP ; }
-        case 9:{ rc.Facility = syslog.LOG_CRON ; }
-        case 10:{ rc.Facility = syslog.LOG_AUTHPRIV ; }
-        case 11:{ rc.Facility = syslog.LOG_FTP ; }
-        case 16:{ rc.Facility = syslog.LOG_LOCAL0 ; }
-        case 17:{ rc.Facility = syslog.LOG_LOCAL1 ; }
-        case 18:{ rc.Facility = syslog.LOG_LOCAL2 ; }
-        case 19:{ rc.Facility = syslog.LOG_LOCAL3 ; }
-        case 20:{ rc.Facility = syslog.LOG_LOCAL4 ; }
-        case 21:{ rc.Facility = syslog.LOG_LOCAL5 ; }
-        case 22:{ rc.Facility = syslog.LOG_LOCAL6 ; }
-        case 23:{ rc.Facility = syslog.LOG_LOCAL7 ; }
+        case 0:{ rc.Facility = LOG_KERN ; }
+        case 1:{ rc.Facility = LOG_USER ; }
+        case 2:{ rc.Facility = LOG_MAIL ; }
+        case 3:{ rc.Facility = LOG_DAEMON ; }
+        case 4:{ rc.Facility = LOG_AUTH ; }
+        case 5:{ rc.Facility = LOG_SYSLOG ; }
+        case 6:{ rc.Facility = LOG_LPR ; }
+        case 7:{ rc.Facility = LOG_NEWS ; }
+        case 8:{ rc.Facility = LOG_UUCP ; }
+        case 9:{ rc.Facility = LOG_CRON ; }
+        case 10:{ rc.Facility = LOG_AUTHPRIV ; }
+        case 11:{ rc.Facility = LOG_FTP ; }
+        case 16:{ rc.Facility = LOG_LOCAL0 ; }
+        case 17:{ rc.Facility = LOG_LOCAL1 ; }
+        case 18:{ rc.Facility = LOG_LOCAL2 ; }
+        case 19:{ rc.Facility = LOG_LOCAL3 ; }
+        case 20:{ rc.Facility = LOG_LOCAL4 ; }
+        case 21:{ rc.Facility = LOG_LOCAL5 ; }
+        case 22:{ rc.Facility = LOG_LOCAL6 ; }
+        case 23:{ rc.Facility = LOG_LOCAL7 ; }
     }
 
     switch(priorityN){
-        case 0:{ rc.Severity = syslog.LOG_EMERG ; }
-        case 1:{ rc.Severity = syslog.LOG_ALERT ; }
-        case 2:{ rc.Severity = syslog.LOG_CRIT ; }
-        case 3:{ rc.Severity = syslog.LOG_ERR ; }
-        case 4:{ rc.Severity = syslog.LOG_WARNING ; }
-        case 5:{ rc.Severity = syslog.LOG_NOTICE ; }
-        case 6:{ rc.Severity = syslog.LOG_INFO ; }
-        case 7:{ rc.Severity = syslog.LOG_DEBUG ; }
+        case 0:{ rc.Severity = LOG_EMERG ; }
+        case 1:{ rc.Severity = LOG_ALERT ; }
+        case 2:{ rc.Severity = LOG_CRIT ; }
+        case 3:{ rc.Severity = LOG_ERR ; }
+        case 4:{ rc.Severity = LOG_WARNING ; }
+        case 5:{ rc.Severity = LOG_NOTICE ; }
+        case 6:{ rc.Severity = LOG_INFO ; }
+        case 7:{ rc.Severity = LOG_DEBUG ; }
     }
 }
 
@@ -1720,28 +1755,127 @@ func SyslogDaemon(opts ... any) (error){
 }
 
 const (
-    LOG_PERROR      = 32 ;
-    LOG_NDELAY      = 8 ;
-    LOG_ODELAY      = 4 ;
-    LOG_CONS        = 2 ;
-    LOG_PID         = 1 ;
+    LOG_LOCATION        = 0x10000 ;
+    LOG_PERROR          = 32 ;
+    LOG_NDELAY          = 8 ;
+    LOG_ODELAY          = 4 ;
+    LOG_CONS            = 2 ;
+    LOG_PID             = 1 ;
 )
 
-type TypeSyslog struct {
+type OpenSyslogOption struct {
+    inited      bool ;
     Prefix      string ;
     Flags       int ;
-    Facility    int ;
+    Facility    syslog.Priority ;
+    Addr        string ;
 }
 
-func OpenSyslog(prefix string,flags int,facility int) (*TypeSyslog){
-    ret := TypeSyslog{} ;
-    return &ret ;
+func NewOpenSyslogOption(opts ... any) (*OpenSyslogOption){
+    ret := &OpenSyslogOption{} ;
+    for _,opt := range(opts){
+        switch(sprintf("%T",opt)){
+            case "*BerdyshFrameworkGoLang.OpenSyslogOption":{
+                ret = opt.(*OpenSyslogOption) ;
+                printf("A-SetAddr(%s)\n",ret.Addr) ;
+            }
+            case "BerdyshFrameworkGoLang.OpenSyslogOption":{
+                def := opt.(OpenSyslogOption) ;
+                ret = &def ;
+                printf("B-SetAddr(%s)\n",ret.Addr) ;
+            }
+            default:{
+                printf("!!!![%T]\n",opt) ;
+            }
+        }
+    }
+
+    ret.inited = true ;
+
+    return ret ;
 }
 
-func (this *TypeSyslog) Syslog(lv int,format string,args ... any){
+func (this *OpenSyslogOption) Init(){
+    this.inited = true ;
 }
 
-func (this *TypeSyslog) Close(){
+func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (*OpenSyslogOption,error){
+
+    var option *OpenSyslogOption ;
+
+    ret := OpenSyslogOption{} ;
+    ret.Init() ;
+    ret.Prefix      = prefix ;
+    ret.Flags       = flags ;
+    ret.Facility    = facility ;
+
+    for _,opt := range(opts){
+        switch(sprintf("%T",opt)){
+            case "*BerdyshFrameworkGoLang.OpenSyslogOption":{
+                option = opt.(*OpenSyslogOption) ; _ = option ;
+                ret.Addr = option.Addr ;
+                printf("C-SetAddr(%s)\n",option.Addr) ;
+            }
+            default:{
+                printf("[%T]\n",opt) ;
+            }
+        }
+    }
+
+    return &ret,nil ;
+}
+
+func (this *OpenSyslogOption) Now(opts ... any) (string){
+    var t time.Time ;
+    var IsSet bool ;
+
+    if(len(opts) >= 1){
+        switch(sprintf("%T",opts[0])){
+            case "time.Time":{
+                t = opts[0].(time.Time) ;
+                IsSet = true ;
+            }
+        }
+    }
+
+    if(! IsSet){
+        t = time.Now() ;
+    }
+
+    return t.Format("Jan _2 15:04:05") ;
+
+    return "-" ;
+}
+
+func (this *OpenSyslogOption) Send(packet string) (error){
+
+    printf("%s\n",packet) ;
+    printf("%s\n",Hexdump(packet)) ;
+
+    return nil ;
+}
+
+func (this *OpenSyslogOption) Syslog(severity syslog.Priority,format string,args ... any) (error){
+    var packet  string ;
+    if(this.inited != true){ return Errorf("Not Init.") ; }
+
+    pri := (this.Facility | severity) ;
+
+    pid := os.Getpid() ;
+
+    mess := sprintf(format,args...) ;
+    packet = sprintf("<%d>%s %s[%d]: %s%s",pri,this.Now(),this.Prefix,pid,mess,Chr(0)) ;
+
+    return this.Send(packet) ;
+
+    return nil ;
+}
+
+func (this *OpenSyslogOption) Debugf(format string,args ... any) (error){
+    return this.Syslog(LOG_DEBUG,format,args...) ;
+}
+
+func (this *OpenSyslogOption) Close(){
 }
 
 type HandlerLocal struct {
@@ -1780,18 +1914,18 @@ func TestSyslogServer(){
     entry := NewSyslogEntry() ;
 
     router.Handle(entry,&handler3) ;
-    entry.Severity = syslog.LOG_ERR ; router.Handle(entry,&handler4) ;
+    entry.Severity = LOG_ERR ; router.Handle(entry,&handler4) ;
 
     entry = NewSyslogEntry() ;
 
-    entry.Facility = syslog.LOG_LOCAL0 ; router.Handle(entry,&handler) ;
-    entry.Facility = syslog.LOG_LOCAL1 ; router.Handle(entry,&handler) ;
-    entry.Facility = syslog.LOG_LOCAL2 ; router.Handle(entry,&handler) ;
-    entry.Facility = syslog.LOG_LOCAL3 ; router.Handle(entry,&handler) ;
-    entry.Facility = syslog.LOG_LOCAL4 ; router.Handle(entry,&handler2) ;
-    entry.Facility = syslog.LOG_LOCAL5 ; router.Handle(entry,&handler2) ;
-    entry.Facility = syslog.LOG_LOCAL6 ; router.Handle(entry,&handler2) ;
-    entry.Facility = syslog.LOG_LOCAL7 ; router.Handle(entry,&handler2) ;
+    entry.Facility = LOG_LOCAL0 ; router.Handle(entry,&handler) ;
+    entry.Facility = LOG_LOCAL1 ; router.Handle(entry,&handler) ;
+    entry.Facility = LOG_LOCAL2 ; router.Handle(entry,&handler) ;
+    entry.Facility = LOG_LOCAL3 ; router.Handle(entry,&handler) ;
+    entry.Facility = LOG_LOCAL4 ; router.Handle(entry,&handler2) ;
+    entry.Facility = LOG_LOCAL5 ; router.Handle(entry,&handler2) ;
+    entry.Facility = LOG_LOCAL6 ; router.Handle(entry,&handler2) ;
+    entry.Facility = LOG_LOCAL7 ; router.Handle(entry,&handler2) ;
 
     if(true){
         addrs := make([]string,0) ;

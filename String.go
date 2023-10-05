@@ -30,7 +30,31 @@ func Intval(org interface{}) int{
 }
 
 func Chr(c interface{}) string {
-    return string(c.(byte)) ;
+
+    r := make([]rune,1) ;
+
+    switch(sprintf("%T",c)){
+        case "int":{
+            r[0] = (rune)(c.(int)) ;
+            return string(r) ;
+        }
+        case "int32":{
+            r[0] = (rune)(c.(int32)) ;
+            return string(r) ;
+        }
+        case "uint8":{
+            r[0] = (rune)(c.(uint8)) ;
+            return string(r) ;
+        }
+        case "byte":{
+            return string(c.(byte)) ;
+        }
+        default:{
+            printf("!!![%T]\n",c) ;
+        }
+    }
+
+    return "" ;
 }
 
 func Ord(c interface{}) rune {
