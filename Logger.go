@@ -1536,7 +1536,8 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
         }else{
             switch(ui.Scheme){
                 case "unix":{
-                    netDial = "unix" ;
+                    // netDial = "unix" ;
+                    netDial = "unixgram" ;
                     addrDial = ui.Path ;
                 }
                 case "tcp","udp":{
@@ -1769,6 +1770,9 @@ type OpenSyslogOption struct {
     Flags       int ;
     Facility    syslog.Priority ;
     Addr        string ;
+    Network     string ;
+
+    Conn        net.Conn ;
 }
 
 func NewOpenSyslogOption(opts ... any) (*OpenSyslogOption){
@@ -1801,20 +1805,24 @@ func (this *OpenSyslogOption) Init(){
 
 func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (*OpenSyslogOption,error){
 
+    var err error ;
+
     var option *OpenSyslogOption ;
 
-    ret := OpenSyslogOption{} ;
-    ret.Init() ;
-    ret.Prefix      = prefix ;
-    ret.Flags       = flags ;
-    ret.Facility    = facility ;
+    this := OpenSyslogOption{} ;
+    this.Init() ;
+    this.Prefix      = prefix ;
+    this.Flags       = flags ;
+    this.Facility    = facility ;
 
     for _,opt := range(opts){
         switch(sprintf("%T",opt)){
             case "*BerdyshFrameworkGoLang.OpenSyslogOption":{
                 option = opt.(*OpenSyslogOption) ; _ = option ;
-                ret.Addr = option.Addr ;
-                printf("C-SetAddr(%s)\n",option.Addr) ;
+                if(option.Addr != ""){
+                    this.Addr = option.Addr ;
+                    printf("C-SetAddr(%s)\n",option.Addr) ;
+                }
             }
             default:{
                 printf("[%T]\n",opt) ;
@@ -1822,7 +1830,83 @@ func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (
         }
     }
 
-    return &ret,nil ;
+    network := "unix" ;
+    addr := "/dev/log" ; _ = addr ;
+
+    if(this.Addr == ""){ this.Addr = "unix:///dev/log" ; }
+
+    ui , err := url.Parse(this.Addr) ;
+    if(err != nil){
+        return &this,err ;
+    }else{
+        switch(ui.Scheme){
+            case "unix","unixgram":{
+                network = "unix" ;
+                addr = ui.Path ;
+
+                logTypes := make([]string,0) ;
+                logTypes = append(logTypes,ui.Scheme) ;
+
+                if(ui.Scheme != "unixgram"){ logTypes = append(logTypes,"unixgram") ; }
+                if(ui.Scheme != "unix"){ logTypes = append(logTypes,"unix") ; }
+
+                logPaths := make([]string,0) ;
+                logPaths = append(logPaths,ui.Path) ;
+
+                if(ui.Path != "/dev/log"){ logPaths = append(logPaths,"/dev/log") ; }
+
+                logPaths = append(logPaths,"/var/run/syslog") ;
+                logPaths = append(logPaths,"/var/run/log") ;
+
+                for _, network := range logTypes {
+                    for _, path := range logPaths {
+                        if conn, err := net.Dial(network, path) ; (err == nil){
+                            this.Conn = conn ;
+                            this.Network = network ;
+                        }
+                    }
+                }
+            }
+            case "tcp":{
+                network = "tcp" ;
+                addr = ui.Host ;
+
+                printf("tcp!!![%s][%s]\n",network,addr) ;
+
+                if addrTCP,err := net.ResolveTCPAddr(network,addr) ; (err != nil){
+                    return &this,err ;
+                }else if conn, err := net.DialTCP(network,nil,addrTCP) ; (err == nil){
+                    printf("OK[]\n") ;
+                    this.Conn = conn ;
+                    this.Network = network ;
+                    return &this,nil ;
+                }else{
+                    printf("err[%s]\n",err) ;
+                }
+            }
+            case "udp":{
+                network = "udp" ;
+                addr = ui.Host ;
+
+                printf("udp!!![%s][%s]\n",network,addr) ;
+
+                if addrUDP,err := net.ResolveUDPAddr(network,addr) ; (err != nil){
+                    return &this,err ;
+                }else if conn, err := net.DialUDP(network,nil,addrUDP) ; (err == nil){
+                    printf("OK[]\n") ;
+                    this.Conn = conn ;
+                    this.Network = network ;
+                    return &this,nil ;
+                }else{
+                    printf("err[%s]\n",err) ;
+                }
+            }
+            default:{
+            }
+        }
+    }
+
+    return &this,nil ;
 }
 
 func (this *OpenSyslogOption) Now(opts ... any) (string){
@@ -1849,7 +1933,26 @@ func (this *OpenSyslogOption) Now(opts ... any) (string){
 
 func (this *OpenSyslogOption) Send(packet string) (error){
 
-    printf("%s\n",packet) ;
+    if(this.Conn != nil){
+
+        switch(this.Network){
+            case "unix","udp":{
+                packet += Chr(0) ;
+            }
+            case "tcp":{
+                packet += "\n" ;
+            }
+        }
+
+        if _,err := this.Conn.Write([]byte(packet)) ; (err != nil) {
+            return err ;
+        }else{
+            return nil ;
+        }
+    }
+
+    // printf("[%s][%s]\n",network,this.Addr) ;
+    // printf("%s\n",packet) ;
     printf("%s\n",Hexdump(packet)) ;
 
     return nil ;
@@ -1864,7 +1967,7 @@ func (this *OpenSyslogOption) Syslog(severity syslog.Priority,format string,args
     pid := os.Getpid() ;
 
     mess := sprintf(format,args...) ;
-    packet = sprintf("<%d>%s %s[%d]: %s%s",pri,this.Now(),this.Prefix,pid,mess,Chr(0)) ;
+    packet = sprintf("<%d>%s %s[%d]: %s",pri,this.Now(),this.Prefix,pid,mess) ;
 
     return this.Send(packet) ;
 
@@ -1876,6 +1979,9 @@ func (this *OpenSyslogOption) Debugf(format string,args ... any) (error){
 }
 
 func (this *OpenSyslogOption) Close(){
+    if(this.Conn != nil){
+        this.Conn.Close() ;
+    }
 }
 
 type HandlerLocal struct {

@@ -1,13 +1,37 @@
 #include <stdio.h>
 #include <syslog.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <errno.h>
 
 #if 0
 #include <syslog-ng.h>
 #include <syslog-ng/logwriter.h>
 #endif
 
+void    ByUnix(){
+    struct sockaddr_un sa = {0} ;
+    int fd ;
+
+    puts("unix") ;
+
+    if((fd = socket(AF_UNIX, SOCK_STREAM, 0)) < 0){
+        puts("err-socket") ;
+    }else{
+        sa.sun_family = AF_UNIX ;
+        strcpy(sa.sun_path, "/dev/log") ;
+        if(connect(fd, (struct sockaddr*)&sa, sizeof(struct sockaddr_un)) < 0){
+            printf("err-connect[%d][%s]\n",errno,strerror(errno)) ;
+
+        }else{
+            puts("ok-connect") ;
+        }
+    }
+}
+
 void    BySyslog(){
-    openlog("ident", 0, LOG_LOCAL7) ;
+    openlog("ident", 0, LOG_LOCAL2) ;
     syslog(LOG_DEBUG    ,"%s","X_1") ;
     syslog(LOG_INFO     ,"%s","X_2") ;
     syslog(LOG_WARNING  ,"%s","X_3") ;
@@ -46,7 +70,8 @@ void    BySyslogNg(){
 #endif
 
 int main(){
-    BySyslog() ;
+//  BySyslog() ;
+    ByUnix() ;
     return 0 ;
 }
 

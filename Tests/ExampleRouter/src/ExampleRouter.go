@@ -498,7 +498,7 @@ func    Entry() {
     if(false){ EntryIris(addr) ; }
     if(false){ EntryVanilla(addr) ; }
 
-    if(true){ InitLogger() ; }
+    if(false){ InitLogger() ; }
 
     if(true){ X.Tick() ; }
 }
