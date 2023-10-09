@@ -8,6 +8,9 @@ all: clean tidy build run
 ${EXE}: main.go
 	${GO} build -o $@ $<
 
+get:
+	${GO} get gopkg.in/mcuadros/go-syslog.v2
+
 go.mod:
 	echo "module main" > go.mod
 	echo "replace local/BerdyshFrameworkGoLang => ../../../.." >> go.mod

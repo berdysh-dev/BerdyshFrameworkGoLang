@@ -6,18 +6,21 @@ import (
     "log"
     "log/slog"
     "log/syslog"
+    "net"
     "net/url"
     "net/netip"
+    "crypto/tls"
     "runtime"
+    "bufio"
     "strconv"
     "strings"
     "context"
     "go.uber.org/zap"
-    "net"
     "time"
+    "errors"
     "sync"
+    "bytes"
 _   "regexp"
-_   "strconv"
 _   "reflect"
 
 )
@@ -76,7 +79,954 @@ const (
     LOG_NOTICE      = syslog.LOG_NOTICE
     LOG_INFO        = syslog.LOG_INFO
     LOG_DEBUG       = syslog.LOG_DEBUG
+) ;
+
+const (
+    hostname            = "hostname"
+    client              = "client"
+    tls_peer            = "tls_peer"
+    timestamp           = "timestamp"
+    msg_id              = "msg_id"
+    facility            = "facility"
+    version             = "version"
+    proc_id             = "proc_id"
+    message             = "message"
+    priority            = "priority"
+    severity            = "severity"
+    app_name            = "app_name"
+    structured_data     = "structured_data"
+    tag                 = "tag"
+    content             = "content"
+) ;
+
+type ParserError struct {
+    ErrorString string ;
+}
+
+func (err *ParserError) Error() string {
+    return err.ErrorString ;
+}
+
+type XFacility struct {
+    Value int ;
+}
+
+type XSeverity struct {
+    Value int ;
+}
+
+type XPriority struct {
+    P int ;
+    F XFacility ;
+    S XSeverity ;
+}
+
+const (
+    PRI_PART_START = '<'
+    PRI_PART_END   = '>'
+    NO_VERSION = -1
 )
+
+var (
+    ErrEOL     = &ParserError{"End of log line"}
+    ErrNoSpace = &ParserError{"No space found"}
+
+    ErrPriorityNoStart  = &ParserError{"No start char found for priority"}
+    ErrPriorityEmpty    = &ParserError{"Priority field empty"}
+    ErrPriorityNoEnd    = &ParserError{"No end char found for priority"}
+    ErrPriorityTooShort = &ParserError{"Priority field too short"}
+    ErrPriorityTooLong  = &ParserError{"Priority field too long"}
+    ErrPriorityNonDigit = &ParserError{"Non digit found in priority"}
+
+    ErrVersionNotFound = &ParserError{"Can not find version"}
+
+    ErrTimestampUnknownFormat = &ParserError{"Timestamp format unknown"}
+
+    ErrHostnameTooShort = &ParserError{"Hostname field too short"}
+)
+
+type TlsPeerNameFunc func(tlsConn *tls.Conn) (tlsPeer string, ok bool) ;
+
+type TimeoutCloser interface {
+    Close() error ;
+    SetReadDeadline(t time.Time) error ;
+}
+
+type ScanCloser struct {
+    *bufio.Scanner ;
+    closer TimeoutCloser ;
+}
+
+type DatagramMessage struct {
+    message []byte ;
+    client  string ;
+}
+
+type Handler interface {
+    Handle(LogParts, int64, error) ;
+}
+
+type Server struct {
+
+    listeners           []net.Listener
+    connections         []net.PacketConn
+
+    handler             Handler ;
+
+    lastError   error ;
+    readTimeoutMilliseconds int64 ;
+
+    format      Format ;
+
+    wait        sync.WaitGroup ;
+    doneTcp     chan bool ;
+
+    tlsPeerNameFunc         TlsPeerNameFunc ;
+    datagramPool            sync.Pool ;
+    datagramChannelSize     int ;
+    datagramChannel         chan DatagramMessage ;
+} ;
+
+type LogParts map[string]interface{} ;
+type LogPartsChannel chan LogParts ;
+
+type ISyslogHandler interface {
+    Handle(LogParts, int64, error) ;
+}
+
+type ChannelHandler struct {
+    channel LogPartsChannel ;
+} ;
+
+func defaultTlsPeerName(tlsConn *tls.Conn) (tlsPeer string, ok bool) {
+    state := tlsConn.ConnectionState() ;
+    if len(state.PeerCertificates) <= 0 {
+        return "", false ;
+    }else{
+        cn := state.PeerCertificates[0].Subject.CommonName ;
+        return cn, true ;
+    }
+}
+
+func (h *ChannelHandler) SetChannel(channel LogPartsChannel) {
+    h.channel = channel ;
+}
+
+func NewChannelHandler(channel LogPartsChannel) *ChannelHandler {
+    handler := new(ChannelHandler) ;
+    handler.SetChannel(channel) ;
+    return handler ;
+}
+
+type TypeRFC3164 struct {} ;
+type TypeRFC5424 struct {} ;
+type TypeRFC6587 struct {} ;
+type TypeAutomatic struct {} ;
+
+var (
+    RFC3164   = &TypeRFC3164{}
+    RFC5424   = &TypeRFC5424{}
+    RFC6587   = &TypeRFC6587{}
+    Automatic = &TypeAutomatic{}
+)
+
+const (
+    detectedUnknown = iota
+    detectedRFC3164 = iota
+    detectedRFC5424 = iota
+    detectedRFC6587 = iota
+)
+
+func detect(data []byte) int {
+    if i := bytes.IndexByte(data, ' '); i > 0 {
+        pLength := data[0:i] ;
+        if _, err := strconv.Atoi(string(pLength)); err == nil {
+            return detectedRFC6587 ;
+        }
+        if data[0] != '<' {
+            return detectedRFC3164 ;
+        }
+        angle := bytes.IndexByte(data, '>')
+        if (angle < 0) || (angle >= i) {
+            return detectedRFC3164 ;
+        }
+
+        if (angle+2 == i) && (data[angle+1] >= '0') && (data[angle+1] <= '9') {
+            return detectedRFC5424 ;
+        } else {
+            return detectedRFC3164 ;
+        }
+    }
+    return detectedRFC3164 ;
+}
+
+func (f *TypeAutomatic) GetParser(line []byte) LogParser {
+    switch format := detect(line); format {
+    case detectedRFC3164:
+        return &parserWrapper{NewParserRFC3164(line)}
+    case detectedRFC5424:
+        return &parserWrapper{NewParserRFC5424(line)}
+    default:
+        return &parserWrapper{NewParserRFC3164(line)}
+    }
+}
+
+func (f *TypeAutomatic) automaticScannerSplit(data []byte, atEOF bool) (advance int, token []byte, err error) {
+
+    if atEOF && len(data) == 0 {
+        return 0, nil, nil ;
+    }
+
+    switch format := detect(data); format {
+        case detectedRFC6587:{
+            return rfc6587ScannerSplit(data, atEOF) ;
+        }
+        case detectedRFC3164, detectedRFC5424:{
+            return bufio.ScanLines(data, atEOF) ;
+        }
+        default:{
+            if err != nil { return 0, nil, err ; }
+            return 0, nil, nil ;
+        }
+    }
+}
+
+func (f *TypeAutomatic) GetSplitFunc() bufio.SplitFunc {
+    return f.automaticScannerSplit ;
+}
+
+const (
+    datagramChannelBufferSize = 10
+    datagramReadBufferSize    = 64 * 1024
+)
+
+type parserWrapper struct {
+    LogParser
+}
+
+func (w *parserWrapper) Dump() LogParts {
+    return LogParts(w.LogParser.Dump())
+}
+
+type header struct {
+    priority  XPriority
+    version   int
+    timestamp time.Time
+    hostname  string
+    appName   string
+    procId    string
+    msgId     string
+}
+
+type rfc3164message struct {
+    tag     string
+    content string
+}
+
+type ParserRFC3164 struct {
+    buff     []byte
+    cursor   int
+    l        int
+    priority XPriority
+    version  int
+    header   header
+    message  rfc3164message
+    location *time.Location
+    skipTag  bool
+}
+
+type ParserRFC5424 struct {
+    buff            []byte
+    cursor          int
+    l               int
+    header          header
+    structuredData  string
+    message         string
+}
+
+func NewParserRFC3164(buff []byte) *ParserRFC3164 {
+    ret := ParserRFC3164{} ;
+
+    ret.buff        = buff ;
+    ret.cursor      = 0 ;
+    ret.l           = len(buff) ;
+    ret.location    = time.UTC ;
+
+    return &ret ;
+}
+
+func NewParserRFC5424(buff []byte) *ParserRFC5424 {
+    printf("NewParserRFC5424[%s].\n",(string)(buff));
+    return &ParserRFC5424{
+        buff:   buff,
+        cursor: 0,
+        l:      len(buff),
+    }
+}
+
+func (this *TypeRFC5424) GetParser(line []byte) LogParser{
+    return &parserWrapper{NewParserRFC5424(line)} ;
+}
+
+func (this *TypeRFC5424) GetSplitFunc() bufio.SplitFunc{
+    return nil ;
+}
+
+func (p* ParserRFC3164) Dump() LogParts {
+
+    ret := LogParts{
+        timestamp: p.header.timestamp,
+        hostname:  p.header.hostname,
+        tag:       p.message.tag,
+        content:   p.message.content,
+        priority:  p.priority.P,
+        facility:  p.priority.F.Value,
+        severity:  p.priority.S.Value,
+    }
+
+    return ret ;
+}
+
+func (this *ParserRFC3164) Location(location *time.Location) {
+    printf("ParserRFC3164.Location\n") ;
+
+    this.location = location ;
+}
+
+func (this *ParserRFC5424) Location(location *time.Location) {
+    printf("ParserRFC5424.Location\n") ;
+}
+
+func newPriority(p int) XPriority {
+    return XPriority{
+        P: p,
+        F: XFacility{Value: p / 8},
+        S: XSeverity{Value: p % 8},
+    }
+}
+
+func IsDigit(c byte) bool {
+    return (c >= '0' && c <= '9') ;
+}
+
+func ParsePriority(buff []byte, cursor *int, l int) (XPriority, error) {
+    pri := newPriority(0) ;
+    if l <= 0 { return pri, ErrPriorityEmpty ; }
+    if buff[*cursor] != PRI_PART_START { return pri, ErrPriorityNoStart ; }
+
+    i := 1 ;
+    priDigit := 0 ;
+
+    for i < l {
+        if i >= 5 { return pri, ErrPriorityTooLong ; }
+        c := buff[i] ;
+        if (c == PRI_PART_END) {
+            if i == 1 { return pri, ErrPriorityTooShort ; }
+            *cursor = i + 1 ;
+            return newPriority(priDigit), nil ;
+        }
+
+        if(IsDigit(c)){
+            v, e := strconv.Atoi(string(c)) ;
+            if e != nil { return pri, e ; }
+            priDigit = (priDigit * 10) + v ;
+        } else {
+            return pri, ErrPriorityNonDigit ;
+        }
+
+        i++ ;
+    }
+
+    return pri, ErrPriorityNoEnd ;
+}
+
+func (p *ParserRFC3164) parsePriority() (XPriority, error) {
+    return ParsePriority(p.buff, &p.cursor, p.l) ;
+}
+
+func (p *ParserRFC3164) parseContent() (string, error) {
+    if(p.cursor > p.l){
+        return "", ErrEOL ;
+    }else{
+        content := bytes.Trim(p.buff[p.cursor:p.l], " ") ;
+        p.cursor += len(content) ;
+        return string(content), ErrEOL ;
+    }
+}
+
+func (p *ParserRFC3164) parseHeader() (header, error) {
+    hdr := header{} ;
+
+    if ts, err := p.parseTimestamp() ; (err != nil){
+        return hdr, err ;
+    }else{
+        if hostname, err := p.parseHostname() ; (err != nil){
+            return hdr, err ;
+        }else{
+            hdr.timestamp = ts ;
+            hdr.hostname = hostname ;
+            return hdr, nil ;
+        }
+    }
+}
+
+func (p *ParserRFC3164) parsemessage() (rfc3164message, error) {
+    msg := rfc3164message{} ;
+
+    if !p.skipTag {
+        if tag, err := p.parseTag() ; (err != nil) {
+            return msg, err ;
+        }else{
+            msg.tag = tag ;
+        }
+    }
+
+    if content, err := p.parseContent() ; (err != ErrEOL) {
+        return msg, err ;
+    }else{
+        msg.content = content ;
+        return msg, err ;
+    }
+}
+
+func fixTimestampIfNeeded(ts *time.Time) {
+    now := time.Now() ;
+    y := ts.Year() ;
+    if ts.Year() == 0 { y = now.Year() ; }
+    newTs := time.Date(y, ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), ts.Nanosecond(), ts.Location()) ;
+    *ts = newTs ;
+}
+
+func (p *ParserRFC3164) parseTimestamp() (time.Time, error) {
+    var ts time.Time ;
+    var err error ;
+    var tsFmtLen int ;
+    var sub []byte ;
+
+    tsFmts := []string{
+        time.Stamp,
+        time.RFC3339,
+    }
+    if c := p.buff[p.cursor]; c > '0' && c < '9' {
+        tsFmts = []string{
+            time.RFC3339,
+            time.Stamp,
+        }
+    }
+
+    found := false ;
+    for _, tsFmt := range tsFmts {
+        tsFmtLen = len(tsFmt) ;
+
+        if(p.cursor+tsFmtLen > p.l){ continue ; }
+
+        sub = p.buff[p.cursor : tsFmtLen+p.cursor] ;
+        ts, err = time.ParseInLocation(tsFmt, string(sub), p.location) ;
+        if err == nil {
+            found = true ;
+            break ;
+        }
+    }
+
+    if !found {
+        p.cursor = len(time.Stamp) ;
+        if (p.cursor < p.l) && (p.buff[p.cursor] == ' ') { p.cursor++ ; }
+        return ts, ErrTimestampUnknownFormat ;
+    }
+
+    fixTimestampIfNeeded(&ts) ;
+    p.cursor += tsFmtLen ;
+    if (p.cursor < p.l) && (p.buff[p.cursor] == ' ') { p.cursor++ ; }
+    return ts, nil ;
+}
+
+func ParseHostname(buff []byte, cursor *int, l int) (string, error) {
+    from := *cursor ;
+    if from >= l { return "", ErrHostnameTooShort ; }
+    var to int ;
+    for to = from; to < l; to++ {
+        if buff[to] == ' ' {
+            break ;
+        }
+    }
+    hostname := buff[from:to] ;
+    *cursor = to ;
+    return string(hostname), nil ;
+}
+
+func (p *ParserRFC3164) parseHostname() (string, error) {
+    oldcursor := p.cursor ;
+    if hostname, err := ParseHostname(p.buff, &p.cursor, p.l) ; (err == nil && len(hostname) > 0 && string(hostname[len(hostname)-1]) == ":") {
+        p.cursor = oldcursor - 1 ;
+        myhostname, err := os.Hostname() ;
+        if err == nil { return myhostname, nil ; }
+        return "", nil ;
+    }else{
+        return hostname, err ;
+    }
+}
+
+func (p *ParserRFC3164) parseTag() (string, error) {
+    var b byte ;
+    var endOfTag bool ;
+    var bracketOpen bool ;
+    var tag []byte ;
+    var err error ;
+    var found bool ;
+
+    from := p.cursor ;
+
+    for {
+        if p.cursor == p.l {
+            p.cursor = from ;
+            return "", nil ;
+        }
+
+        b = p.buff[p.cursor] ;
+        bracketOpen = (b == '[') ;
+        endOfTag = (b == ':' || b == ' ') ;
+
+        if bracketOpen {
+            tag = p.buff[from:p.cursor] ;
+            found = true ;
+        }
+
+        if endOfTag {
+            if !found {
+                tag = p.buff[from:p.cursor] ;
+                found = true ;
+            }
+
+            p.cursor++ ;
+            break ;
+        }
+
+        p.cursor++ ;
+    }
+
+    if (p.cursor < p.l) && (p.buff[p.cursor] == ' ') { p.cursor++ ; }
+
+    return string(tag), err ;
+}
+
+func (p *ParserRFC3164) Parse() error {
+    // printf("ParserRFC3164.Parse\n") ;
+
+    tcursor := p.cursor ;
+    pri, err := p.parsePriority() ;
+    if err != nil {
+        p.priority = XPriority{13, XFacility{Value: 1}, XSeverity{Value: 5}}
+        p.cursor = tcursor ;
+        content, err := p.parseContent() ;
+        p.header.timestamp = time.Now().Round(time.Second) ;
+        if err != ErrEOL {
+            return err ;
+        }
+        p.message = rfc3164message{content: content} ;
+        return nil ;
+    }
+
+    tcursor = p.cursor ;
+    hdr, err := p.parseHeader() ;
+    if err == ErrTimestampUnknownFormat {
+        hdr.timestamp = time.Now().Round(time.Second)
+        p.skipTag = true ;
+        p.cursor = tcursor ;
+    } else if err != nil {
+        return err ;
+    } else {
+        p.cursor++ ;
+    }
+
+    msg, err := p.parsemessage() ;
+    if err != ErrEOL { return err ; }
+
+    p.priority = pri ;
+    p.version = NO_VERSION ;
+    p.header = hdr ;
+    p.message = msg ;
+
+    return nil ;
+}
+
+func (this *ParserRFC5424) Parse() error {
+    return nil ;
+}
+
+func (p *ParserRFC5424) Dump() LogParts{
+
+    return LogParts{
+        priority:           p.header.priority.P,
+        facility:           p.header.priority.F.Value,
+        severity:           p.header.priority.S.Value,
+        version:            p.header.version,
+        timestamp:          p.header.timestamp,
+        hostname:           p.header.hostname,
+        app_name:           p.header.appName,
+        proc_id:            p.header.procId,
+        msg_id:             p.header.msgId,
+        structured_data:    p.structuredData,
+        message:            p.message,
+    }
+}
+
+func (f *TypeRFC3164) GetParser(line []byte) LogParser {
+    return &parserWrapper{NewParserRFC3164(line)} ;
+}
+
+func (f *TypeRFC3164) GetSplitFunc() bufio.SplitFunc {
+    return nil ;
+}
+
+func (f *TypeRFC6587) GetParser(line []byte) LogParser {
+    return &parserWrapper{NewParserRFC5424(line)} ;
+}
+
+
+func rfc6587ScannerSplit(data []byte, atEOF bool) (advance int, token []byte, err error) {
+    if(atEOF && len(data) == 0){
+        return 0, nil, nil ;
+    }
+
+    if i := bytes.IndexByte(data, ' '); i > 0 {
+        pLength := data[0:i] ;
+        if length, err := strconv.Atoi(string(pLength)) ; (err != nil) {
+            if string(data[0:1]) == "<" {
+                return len(data), data, nil ;
+            }else{
+                return 0, nil, err ;
+            }
+        }else{
+            end := length + i + 1 ;
+            if len(data) >= end {
+                return end, data[i+1 : end], nil ;
+            }
+        }
+    }
+
+    return 0, nil, nil ;
+}
+
+func (f *TypeRFC6587) GetSplitFunc() bufio.SplitFunc {
+    return rfc6587ScannerSplit ;
+}
+
+type LogParser interface {
+    Parse() error ;
+    Dump() LogParts ;
+    Location(*time.Location) ;
+}
+
+type Format interface {
+    GetParser([]byte) LogParser ;
+    GetSplitFunc() bufio.SplitFunc ;
+}
+
+func NewServer() *Server{
+    server := Server{} ;
+    server.tlsPeerNameFunc = defaultTlsPeerName ;
+    server.datagramChannelSize = datagramChannelBufferSize ;
+
+    server.datagramPool = sync.Pool{} ;
+    server.datagramPool.New = func() interface{} {
+        return make([]byte, 65536) ;
+    } ;
+
+    return &server ;
+}
+
+func (s *Server) scan(scanCloser *ScanCloser, client string, tlsPeer string) {
+loop:
+    for {
+        select {
+        case <-s.doneTcp:
+            break loop
+        default:
+        }
+
+        if s.readTimeoutMilliseconds > 0 {
+            scanCloser.closer.SetReadDeadline(time.Now().Add(time.Duration(s.readTimeoutMilliseconds) * time.Millisecond)) ;
+        }
+
+        if scanCloser.Scan() {
+            s.parser([]byte(scanCloser.Text()), client, tlsPeer) ;
+        } else {
+            break loop ;
+        }
+    }
+    scanCloser.closer.Close() ;
+    s.wait.Done() ;
+}
+
+func (h *ChannelHandler) Handle(logParts LogParts, messageLength int64, err error) {
+    // printf("BBB[%d].\n",messageLength) ;
+    h.channel <- logParts ;
+}
+
+func (s *Server) parser(line []byte, client string, tlsPeer string) {
+    parser := s.format.GetParser(line) ;
+    if err := parser.Parse() ; (err != nil) {
+        s.lastError = err ;
+    }else{
+
+        logParts := parser.Dump() ;
+        logParts["client"] = client ;
+
+        if logParts["hostname"] == "" && (s.format == RFC3164 || s.format == Automatic) {
+            if i := strings.Index(client, ":"); i > 1 {
+                logParts["hostname"] = client[:i] ;
+            } else {
+                logParts["hostname"] = client ;
+            }
+        }
+
+        logParts["tls_peer"] = tlsPeer ;
+
+        /// printf("AAA.\n") ;
+
+        s.handler.Handle(logParts, int64(len(line)), err) ;
+    }
+}
+
+func (s *Server) goScanConnection(connection net.Conn) {
+    scanner := bufio.NewScanner(connection) ;
+
+    if sf := s.format.GetSplitFunc(); sf != nil {
+        scanner.Split(sf) ;
+    }
+
+    // printf("goScanConnection\n") ;
+
+    var client string ;
+    if remoteAddr := connection.RemoteAddr() ; (remoteAddr != nil) {
+        client = remoteAddr.String() ;
+    }
+
+    tlsPeer := "" ;
+    if tlsConn, ok := connection.(*tls.Conn); ok {
+        if err := tlsConn.Handshake(); err != nil {
+            connection.Close() ;
+            return ;
+        }
+        if s.tlsPeerNameFunc != nil {
+            var ok bool ;
+            if tlsPeer, ok = s.tlsPeerNameFunc(tlsConn) ; (!ok) {
+                connection.Close() ;
+                return ;
+            }
+        }
+    }
+
+    var scanCloser *ScanCloser ;
+    scanCloser = &ScanCloser{scanner, connection} ;
+
+    s.wait.Add(1) ;
+    go s.scan(scanCloser, client, tlsPeer) ;
+}
+
+func (this *Server) goAcceptConnection(listener net.Listener) {
+    this.wait.Add(1)
+    go func(listener net.Listener){
+        loop:
+            for {
+                select {
+                    case <-this.doneTcp:
+                        break loop ;
+                    default:
+                }
+                if connection, err := listener.Accept() ; (err != nil){
+                    printf("err[%s]\n",err) ;
+                    continue ;
+                }else{
+                    this.goScanConnection(connection) ;
+                }
+            }
+        this.wait.Done() ;
+    }(listener) ;
+}
+
+func (s *Server) goParseDatagrams() {
+    s.datagramChannel = make(chan DatagramMessage, s.datagramChannelSize) ;
+    s.wait.Add(1) ;
+    go func() {
+        defer s.wait.Done()
+        for {
+            select {
+            case msg, ok := (<-s.datagramChannel):
+                if !ok { return }
+
+                // printf("goParseDatagrams\n") ;
+
+                if sf := s.format.GetSplitFunc(); sf != nil {
+                    if _, token, err := sf(msg.message, true); err == nil {
+                        s.parser(token, msg.client, "") ;
+                    }else{
+                        printf("err[%s].\n",err) ;
+                    }
+                }else{
+                    s.parser(msg.message, msg.client, "") ;
+                }
+                s.datagramPool.Put(msg.message[:cap(msg.message)]) ;
+            }
+        }
+    }() ;
+}
+
+func (s *Server) goReceiveDatagrams(packetconn net.PacketConn) {
+    s.wait.Add(1) ;
+    go func() {
+        defer s.wait.Done() ;
+        for {
+            // printf("Datagram\n") ;
+            buf := s.datagramPool.Get().([]byte) ;
+            if n, addr, err := packetconn.ReadFrom(buf) ; (err == nil) {
+                for ; (n > 0) && (buf[n-1] < 32); n-- { ; }
+                if (n > 0) {
+                    var address string ;
+                    if (addr != nil) {
+                        address = addr.String() ;
+                    }
+                    s.datagramChannel <- DatagramMessage{buf[:n], address} ;
+                }
+            } else {
+                if opError, ok := err.(*net.OpError) ; (ok) && !opError.Temporary() && !opError.Timeout(){
+                    return ;
+                }
+                time.Sleep(10 * time.Millisecond) ;
+            }
+        }
+    }() ;
+}
+
+func (this *Server) Boot() error{
+
+    if this.format == nil {
+        return errors.New("please set a valid format") ;
+    }
+
+    if this.handler == nil {
+        return errors.New("please set a valid handler") ;
+    }
+
+    for _, listener := range this.listeners {
+        this.goAcceptConnection(listener) ;
+    }
+
+    if len(this.connections) > 0 {
+        this.goParseDatagrams() ;
+    }
+
+    for _, connection := range this.connections {
+        this.goReceiveDatagrams(connection) ;
+    }
+
+    return nil ;
+}
+
+func (this *Server) GetLastError() error{
+    return this.lastError ;
+}
+
+func (s *Server) Kill() error{
+    for _, connection := range s.connections {
+        if err := connection.Close() ; (err != nil) {
+            return err ;
+        }
+    }
+
+    for _, listener := range s.listeners {
+        if err := listener.Close() ; (err != nil) {
+            return err ;
+        }
+    }
+    if s.doneTcp != nil {
+        close(s.doneTcp) ;
+    }
+    if s.datagramChannel != nil {
+        close(s.datagramChannel) ;
+    }
+    return nil ;
+}
+
+func (s *Server) ListenTCP(addr string) error{
+    if tcpAddr, err := net.ResolveTCPAddr("tcp", addr) ; (err != nil) {
+        return err ;
+    }else{
+        if listener, err := net.ListenTCP("tcp", tcpAddr) ; (err != nil) {
+            return err ;
+        }else{
+            s.doneTcp = make(chan bool) ;
+            s.listeners = append(s.listeners, listener) ;
+            printf("OK:ListenTCP\n") ;
+            return nil ;
+        }
+    }
+}
+
+func (s *Server) ListenTCPTLS(addr string, config *tls.Config) error{
+    if listener, err := tls.Listen("tcp", addr, config) ; (err != nil) {
+        return err ;
+    }else{
+        s.doneTcp = make(chan bool) ;
+        s.listeners = append(s.listeners, listener) ;
+        return nil ;
+    }
+}
+
+func (this *Server) ListenUDP(addr string) error{
+
+    if udpAddr, err := net.ResolveUDPAddr("udp", addr) ; (err != nil) {
+        return err ;
+    }else{
+        if connection, err := net.ListenUDP("udp", udpAddr) ; (err != nil) {
+            return err ;
+        }else{
+            connection.SetReadBuffer(datagramReadBufferSize) ;
+            this.connections = append(this.connections,connection) ;
+            printf("OK:ListenUDP\n") ;
+            return nil ;
+        }
+    }
+}
+
+func (this *Server) ListenUnixgram(addr string) error{
+    if unixAddr, err := net.ResolveUnixAddr("unixgram", addr) ; (err != nil){
+        return err ;
+    }else{
+        if connection, err := net.ListenUnixgram("unixgram", unixAddr) ; (err != nil) {
+            return err ;
+        }else{
+            connection.SetReadBuffer(datagramReadBufferSize)
+            this.connections = append(this.connections, connection) ;
+            printf("OK:ListenUnixgram\n") ;
+            return nil ;
+        }
+    }
+}
+
+func (this *Server) SetHandler(handler Handler) (*Server){
+    this.handler = handler ;
+    return this ;
+}
+
+func (this *Server) SetFormat(f Format) (*Server){
+    this.format = f ;
+    return this ;
+}
+
+func (this *Server) SetTimeout(millseconds int64) (*Server){
+    this.readTimeoutMilliseconds = millseconds ;
+    return this ;
+}
+
+func (this *Server) SetTlsPeerNameFunc(tlsPeerNameFunc TlsPeerNameFunc) (*Server){
+    return this ;
+}
+
+func (this *Server) Wait() (*Server){
+    this.wait.Wait() ;
+    return this ;
+}
 
 type Priority syslog.Priority ;
 type Facility syslog.Priority ;
@@ -1515,23 +2465,26 @@ func (this *TypeSyslogDaemon) DoTcp(tcpConn *net.TCPConn) (error){
     return nil ;
 }
 
-func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
+func (this *TypeSyslogDaemon) SyslogDaemonNode(idx int,addrListen string) (error){
     netDial := "unix" ; _ = netDial ;
     addrDial := "/dev/log" ; _ = addrDial ;
 
     var addrFrom netip.AddrPort ; _ = addrFrom ;
 
     if(this.router == nil){
+        this.Wait.Done() ;
         return errorf("router 未設定") ;
     }
 
     if(this.router.Err != nil){
+        this.Wait.Done() ;
         return this.router.Err
     }
 
     if(addrListen != ""){
-        // printf("[%s]\n",addrListen) ;
+        printf("%d[%s]\n",idx,addrListen) ;
         if ui , err := url.Parse(addrListen) ; (err != nil){
+            this.Wait.Done() ;
             return err ;
         }else{
             switch(ui.Scheme){
@@ -1552,7 +2505,7 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
         }
     }
 
-    if(netDial == "unix"){
+    if((netDial == "unix") || (netDial == "unixgram")){
         if _ , err := os.Stat(addrDial) ; (err == nil){
             if(addrDial == "/dev/log"){
                 os.Remove(addrDial) ;
@@ -1561,42 +2514,35 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
     }
 
     if(netDial == "udp"){
-        go func()(error){
-            udpAddr, err := net.ResolveUDPAddr(netDial,addrDial) ;
-            if(err != nil){
-                return err ;
-            }else{
-                if udpConn,err := net.ListenUDP(netDial,udpAddr) ; (err != nil){
-                    return err ;
-                }else{
-                    // printf("UDP-Listen.\n") ;
+        go func() error{
+            // time.Sleep(this.SleepBegin * time.Second) ;
+            if udpAddr, err := net.ResolveUDPAddr(netDial,addrDial) ; (err == nil){
+                if udpConn,err := net.ListenUDP(netDial,udpAddr) ; (err == nil){
                     buf := make([]byte,0x1000) ;
+                    printf("UDP-Listen.\n") ;
+                    this.Wait.Done() ;
                     for {
                         szRc,addr,err := udpConn.ReadFromUDPAddrPort(buf) ; _ = szRc ; _ = addr ; _ = err ;
-                        if(err != nil){
-                            printf("err[%s].\n",err) ;
-                        }else{
-                            // printf("UDP\n%s\n",Hexdump(string(buf[:szRc]))) ;
-
+                        if(err == nil){
                             this.SyslogSplit(string(buf[:szRc]) + "<999>") ;
                         }
                     }
                 }
-            }
-            return nil ;
-        }() ;
-    }else if(netDial == "tcp"){
-        go func() (error){
-            tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ;
-
-            if(err != nil){
                 return err ;
             }else{
-                if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err != nil){
-                    return err ;
-                }else{
+                this.Wait.Done() ;
+                return err ;
+            }
+        }() ;
+    }else if(netDial == "tcp"){
+        go func() error{
+            // time.Sleep(this.SleepBegin * time.Second) ;
+
+            if tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ; (err == nil){
+                if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err == nil){
                     defer tcpListener.Close() ;
-                    // printf("TCP-Listen.\n") ;
+                    printf("TCP-Listen.\n") ;
+                    this.Wait.Done() ;
                     for{
                         chanTcpConn := make(chan *net.TCPConn) ;
                         chanTcpErr := make(chan error) ;
@@ -1622,25 +2568,26 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
                         chanTcpConn = nil
                         chanTcpErr = nil
                     }
+                }else{
+                    this.Wait.Done() ;
+                    return err ;
                 }
+            }else{
+                this.Wait.Done() ;
+                return err ;
             }
         }() ;
-    }else if(netDial == "unix"){
-        go func() (error){
-            unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ;
-            if(err != nil){
-                return err ;
-            }else{
+    }else if((netDial == "unix") || (netDial == "unixgram")){
+        go func() error{
+            // time.Sleep(this.SleepBegin * time.Second) ;
+            if unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ; (err == nil){
                 sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
-                if(err != nil){
-                    return err ;
-                }else{
-                    // printf("UNIX-Listen.\n") ;
+                if(err == nil){
+                    printf("UNIX-Listen.\n") ;
+                    this.Wait.Done() ;
                     for{
                         unixConn, err := sockListen.Accept() ;
-                        if(err != nil){
-                            return err ;
-                        }else{
+                        if(err == nil){
                             go func() (error){
                                 buf := make([]byte,0x1000) ;
                                 var szRc int ;
@@ -1667,21 +2614,39 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(addrListen string) (error){
                             }() ;
                         }
                     }
+                }else{
+                    this.Wait.Done() ;
+                    return err ;
                 }
+            }else{
+                this.Wait.Done() ;
+                return err ;
             }
         }() ;
     }
     return nil ;
-    // return errorf("Assert(%s)-1302",netDial) ;
+}
+
+func    Sleep(n int){
+    time.Sleep((time.Duration)(n) * time.Second) ;
 }
 
 type TypeSyslogDaemon struct {
     router *SyslogRouter ;
+    Wait    sync.WaitGroup ;
+    SleepBegin  time.Duration ;
 } ;
+
+func (this *TypeSyslogDaemon) Init() (*TypeSyslogDaemon){
+    this.SleepBegin = 0 ;
+    return this ;
+}
 
 func SyslogDaemon(opts ... any) (error){
 
     T := TypeSyslogDaemon{} ;
+
+    T.Init() ;
 
     addrListens := make([]string,0) ;
 
@@ -1738,19 +2703,23 @@ func SyslogDaemon(opts ... any) (error){
         }
     }
 
-    // for idx,addrListen := range addrListens{ printf("[%d][%s]\n",idx,addrListen) ; }
+    for idx,addrListen := range addrListens{
+        printf("[%d][%s]\n",idx,addrListen) ;
+    }
 
     for idx,addrListen := range addrListens{
+        T.Wait.Add(1) ;
         func(){
-            if err := T.SyslogDaemonNode(addrListen) ; (err != nil){
+            if err := T.SyslogDaemonNode(idx,addrListen) ; (err != nil){
                 printf("%d:[%s]/err[%s]-1349\n",idx,addrListen,err) ;
             }
         }() ;
     }
 
-    // printf("Ready.\n") ;
+    T.Wait.Wait() ;
+    time.Sleep(20 * time.Millisecond) ;
 
-    time.Sleep(1 * time.Second) ;
+    printf("Ready-2330.\n") ;
 
     return nil ;
 }
@@ -1764,7 +2733,7 @@ const (
     LOG_PID             = 1 ;
 )
 
-type OpenSyslogOption struct {
+type LoggerSyslog struct {
     inited      bool ;
     Prefix      string ;
     Flags       int ;
@@ -1773,18 +2742,19 @@ type OpenSyslogOption struct {
     Network     string ;
 
     Conn        net.Conn ;
+    Wait        sync.WaitGroup ;
 }
 
-func NewOpenSyslogOption(opts ... any) (*OpenSyslogOption){
-    ret := &OpenSyslogOption{} ;
+func NewSyslogOption(opts ... any) (*LoggerSyslog){
+    ret := &LoggerSyslog{} ;
     for _,opt := range(opts){
         switch(sprintf("%T",opt)){
-            case "*BerdyshFrameworkGoLang.OpenSyslogOption":{
-                ret = opt.(*OpenSyslogOption) ;
+            case "*BerdyshFrameworkGoLang.LoggerSyslog":{
+                ret = opt.(*LoggerSyslog) ;
                 printf("A-SetAddr(%s)\n",ret.Addr) ;
             }
-            case "BerdyshFrameworkGoLang.OpenSyslogOption":{
-                def := opt.(OpenSyslogOption) ;
+            case "BerdyshFrameworkGoLang.LoggerSyslog":{
+                def := opt.(LoggerSyslog) ;
                 ret = &def ;
                 printf("B-SetAddr(%s)\n",ret.Addr) ;
             }
@@ -1799,17 +2769,17 @@ func NewOpenSyslogOption(opts ... any) (*OpenSyslogOption){
     return ret ;
 }
 
-func (this *OpenSyslogOption) Init(){
+func (this *LoggerSyslog) Init(){
     this.inited = true ;
 }
 
-func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (*OpenSyslogOption,error){
+func NewSyslogClient(prefix string,flags int,facility syslog.Priority,opts ... any) (*LoggerSyslog,error){
 
     var err error ;
 
-    var option *OpenSyslogOption ;
+    var option *LoggerSyslog ;
 
-    this := OpenSyslogOption{} ;
+    this := LoggerSyslog{} ;
     this.Init() ;
     this.Prefix      = prefix ;
     this.Flags       = flags ;
@@ -1817,11 +2787,10 @@ func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (
 
     for _,opt := range(opts){
         switch(sprintf("%T",opt)){
-            case "*BerdyshFrameworkGoLang.OpenSyslogOption":{
-                option = opt.(*OpenSyslogOption) ; _ = option ;
+            case "*BerdyshFrameworkGoLang.LoggerSyslog":{
+                option = opt.(*LoggerSyslog) ; _ = option ;
                 if(option.Addr != ""){
                     this.Addr = option.Addr ;
-                    printf("C-SetAddr(%s)\n",option.Addr) ;
                 }
             }
             default:{
@@ -1870,13 +2839,9 @@ func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (
             case "tcp":{
                 network = "tcp" ;
                 addr = ui.Host ;
-
-                printf("tcp!!![%s][%s]\n",network,addr) ;
-
                 if addrTCP,err := net.ResolveTCPAddr(network,addr) ; (err != nil){
                     return &this,err ;
                 }else if conn, err := net.DialTCP(network,nil,addrTCP) ; (err == nil){
-                    printf("OK[]\n") ;
                     this.Conn = conn ;
                     this.Network = network ;
                     return &this,nil ;
@@ -1887,13 +2852,9 @@ func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (
             case "udp":{
                 network = "udp" ;
                 addr = ui.Host ;
-
-                printf("udp!!![%s][%s]\n",network,addr) ;
-
                 if addrUDP,err := net.ResolveUDPAddr(network,addr) ; (err != nil){
                     return &this,err ;
                 }else if conn, err := net.DialUDP(network,nil,addrUDP) ; (err == nil){
-                    printf("OK[]\n") ;
                     this.Conn = conn ;
                     this.Network = network ;
                     return &this,nil ;
@@ -1909,7 +2870,7 @@ func OpenSyslog(prefix string,flags int,facility syslog.Priority,opts ... any) (
     return &this,nil ;
 }
 
-func (this *OpenSyslogOption) Now(opts ... any) (string){
+func (this *LoggerSyslog) Now(opts ... any) (string){
     var t time.Time ;
     var IsSet bool ;
 
@@ -1931,7 +2892,7 @@ func (this *OpenSyslogOption) Now(opts ... any) (string){
     return "-" ;
 }
 
-func (this *OpenSyslogOption) Send(packet string) (error){
+func (this *LoggerSyslog) Send(packet string) (error){
 
     if(this.Conn != nil){
 
@@ -1953,12 +2914,12 @@ func (this *OpenSyslogOption) Send(packet string) (error){
 
     // printf("[%s][%s]\n",network,this.Addr) ;
     // printf("%s\n",packet) ;
-    printf("%s\n",Hexdump(packet)) ;
+    // printf("%s\n",Hexdump(packet)) ;
 
     return nil ;
 }
 
-func (this *OpenSyslogOption) Syslog(severity syslog.Priority,format string,args ... any) (error){
+func (this *LoggerSyslog) Syslog(severity syslog.Priority,format string,args ... any) (error){
     var packet  string ;
     if(this.inited != true){ return Errorf("Not Init.") ; }
 
@@ -1974,11 +2935,39 @@ func (this *OpenSyslogOption) Syslog(severity syslog.Priority,format string,args
     return nil ;
 }
 
-func (this *OpenSyslogOption) Debugf(format string,args ... any) (error){
+func (this *LoggerSyslog) Alert(format string,args ... any) (error){
+    return this.Syslog(LOG_ALERT,format,args...) ;
+}
+
+func (this *LoggerSyslog) Crit(format string,args ... any) (error){
+    return this.Syslog(LOG_CRIT,format,args...) ;
+}
+
+func (this *LoggerSyslog) Debug(format string,args ... any) (error){
     return this.Syslog(LOG_DEBUG,format,args...) ;
 }
 
-func (this *OpenSyslogOption) Close(){
+func (this *LoggerSyslog) Emerg(format string,args ... any) (error){
+    return this.Syslog(LOG_EMERG,format,args...) ;
+}
+
+func (this *LoggerSyslog) Err(format string,args ... any) (error){
+    return this.Syslog(LOG_ERR,format,args...) ;
+}
+
+func (this *LoggerSyslog) Info(format string,args ... any) (error){
+    return this.Syslog(LOG_INFO,format,args...) ;
+}
+
+func (this *LoggerSyslog) Notice(format string,args ... any) (error){
+    return this.Syslog(LOG_NOTICE,format,args...) ;
+}
+
+func (this *LoggerSyslog) Warning(format string,args ... any) (error){
+    return this.Syslog(LOG_WARNING,format,args...) ;
+}
+
+func (this *LoggerSyslog) Close(){
     if(this.Conn != nil){
         this.Conn.Close() ;
     }
