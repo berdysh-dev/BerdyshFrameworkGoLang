@@ -127,7 +127,17 @@ const (
     NO_VERSION = -1
 )
 
+const (
+    CR  =   0x0D
+    LF  =   0x0A
+)
+
 var (
+    ErrSuccess      = &ParserError{"ErrSuccess"}
+    ErrContinue     = &ParserError{"ErrContinue"}
+    ErrNotEnough    = &ParserError{"ErrNotEnough"}
+    ErrEagain       = &ParserError{"ErrEagain"}
+
     ErrEOL     = &ParserError{"End of log line"}
     ErrNoSpace = &ParserError{"No space found"}
 
@@ -3011,32 +3021,32 @@ func TestSyslogServer(){
     router.Handle(entry,&handler3) ;
     entry.Severity = LOG_ERR ; router.Handle(entry,&handler4) ;
 
-    entry = NewSyslogEntry() ;
+        entry = NewSyslogEntry() ;
 
-    entry.Facility = LOG_LOCAL0 ; router.Handle(entry,&handler) ;
-    entry.Facility = LOG_LOCAL1 ; router.Handle(entry,&handler) ;
-    entry.Facility = LOG_LOCAL2 ; router.Handle(entry,&handler) ;
-    entry.Facility = LOG_LOCAL3 ; router.Handle(entry,&handler) ;
-    entry.Facility = LOG_LOCAL4 ; router.Handle(entry,&handler2) ;
-    entry.Facility = LOG_LOCAL5 ; router.Handle(entry,&handler2) ;
-    entry.Facility = LOG_LOCAL6 ; router.Handle(entry,&handler2) ;
-    entry.Facility = LOG_LOCAL7 ; router.Handle(entry,&handler2) ;
+        entry.Facility = LOG_LOCAL0 ; router.Handle(entry,&handler) ;
+        entry.Facility = LOG_LOCAL1 ; router.Handle(entry,&handler) ;
+        entry.Facility = LOG_LOCAL2 ; router.Handle(entry,&handler) ;
+        entry.Facility = LOG_LOCAL3 ; router.Handle(entry,&handler) ;
+        entry.Facility = LOG_LOCAL4 ; router.Handle(entry,&handler2) ;
+        entry.Facility = LOG_LOCAL5 ; router.Handle(entry,&handler2) ;
+        entry.Facility = LOG_LOCAL6 ; router.Handle(entry,&handler2) ;
+        entry.Facility = LOG_LOCAL7 ; router.Handle(entry,&handler2) ;
 
-    if(true){
-        addrs := make([]string,0) ;
-        addrs = append(addrs,"unix:///dev/log") ;
-        addrs = append(addrs,"tcp://:514") ;
-        addrs = append(addrs,"udp://:514") ;
+        if(true){
+            addrs := make([]string,0) ;
+            addrs = append(addrs,"unix:///dev/log") ;
+            addrs = append(addrs,"tcp://:514") ;
+            addrs = append(addrs,"udp://:514") ;
 
-        if err := SyslogDaemon(addrs,router) ; (err != nil){
-            printf("err[%s]-1672.\n",err) ;
-        }
-    }else{
-        if err := SyslogDaemon("unix:///dev/log","tcp://:514","udp://:514",router) ; (err != nil){
-            printf("err[%s]-1672.\n",err) ;
+            if err := SyslogDaemon(addrs,router) ; (err != nil){
+                printf("err[%s]-1672.\n",err) ;
+            }
+        }else{
+            if err := SyslogDaemon("unix:///dev/log","tcp://:514","udp://:514",router) ; (err != nil){
+                printf("err[%s]-1672.\n",err) ;
+            }
         }
     }
-}
 
 
 
