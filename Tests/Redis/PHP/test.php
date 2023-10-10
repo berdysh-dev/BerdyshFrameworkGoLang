@@ -3,17 +3,35 @@
 
     class CL {
 
-        function CMD($x){
-            $packet = "" ;
-            $packet .= sprintf("*%d\r\n",count($x)) ;
+        function Connect($addr){
+            $errno = $errstr = '' ;
+            $this->SOCK = stream_socket_client($addr, $errno, $errstr, 30) ;
+        }
+
+        function Decode($A){
+        }
+
+        function Cmd($x){
+            $Q = "" ;
+            $Q .= sprintf("*%d\r\n",count($x)) ;
             foreach($x as $k => $v){
-                $packet .= sprintf("$%d\r\n%s\r\n",strlen($v),$v) ;
+                $Q .= sprintf("$%d\r\n%s\r\n",strlen($v),$v) ;
             }
-            echo $packet ;
+
+            printf("[%s]\n",$Q) ;
+
+            $rc = fwrite($this->SOCK,$Q) ;
+            printf("rc[%d]\n",$rc) ;
+
+            $A = fread($this->SOCK,0x1000) ;
+
+            
+            $this->Decode($A) ;
         }
 
         function Test(){
-            $this->CMD(['hello','3']) ;
+            $this->Connect('tcp://127.0.0.1:16379') ;
+            $this->Cmd(['hello','3']) ;
         }
     }
 
