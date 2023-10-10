@@ -111,17 +111,32 @@ func (server *RedisServer) DecodeRESP3(bin []byte,idx int) (int,any,error){
 }
 
 func (server *RedisServer) DecodeProtocol(fifo string) (string,any,error){
-    // printf("[%s]\n",fifo) ;
+    printf("%s\n\n",Hexdump(fifo)) ;
 
     packet := RedisPacket{} ; _ = packet ;
     bin := []byte(fifo) ; _ = bin ;
 
     idx,x,err := server.DecodeRESP3(bin,0) ; _ = idx ; _ = err ;
 
-    // printf("[%T]\n",x) ;
-    // printf("[%V]\n",x) ;
+    printf("[%T]\n",x) ;
+    printf("[%V]\n",x) ;
 
     printf("LEN[%d/%d]\n",idx,len(bin)) ;
+
+    if(sprintf("%T",x) == "[]interface {}"){
+        for idx,v := range x.([]interface {}){
+            printf("%03d:[%T][%V]\n",idx,v,v) ;
+            idx += 1 ;
+        }
+    }
+
+    if(sprintf("%T",x) == "map[string]interface {}"){
+        idx := 0 ;
+        for k,v := range x.(map[string]interface {}){
+            printf("%03d:[%s][%T][%V]\n",idx,k,v,v) ;
+            idx += 1 ;
+        }
+    }
 
     return "",x,ErrNotEnough;
 }

@@ -11,7 +11,7 @@ func main(){
 
     var ctx = context.Background() ;
 
-    if(true){
+    if(false){
 
         X.Printf("Start.\n") ;
 
@@ -25,6 +25,9 @@ func main(){
         X.Printf("err[%s].\n",err) ;
     }else{
         X.Printf("Ready.\n") ;
+
+        X.Tick() ;
+
         cli := R.NewClient(&R.Options{Addr: "localhost:6379"}) ;
         if err := cli.Set(ctx, "key", "value", 0).Err() ; (err != nil){
             X.Printf("Set.err[%s].\n",err) ;

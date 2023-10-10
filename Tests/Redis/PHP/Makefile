@@ -1,0 +1,3 @@
+all:
+	php test.php
+
