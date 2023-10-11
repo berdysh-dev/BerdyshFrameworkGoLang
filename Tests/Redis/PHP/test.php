@@ -9,6 +9,7 @@
         }
 
         function Decode($A){
+            echo $A . "\n" ;
         }
 
         function Cmd($x){
@@ -23,15 +24,28 @@
             $rc = fwrite($this->SOCK,$Q) ;
             printf("rc[%d]\n",$rc) ;
 
-            $A = fread($this->SOCK,0x1000) ;
+            for(;;){
+                $A = fread($this->SOCK,0x1000) ;
+                printf("[%s]\n",$A) ;
+            }
 
-            
-            $this->Decode($A) ;
+            // $this->Decode($A) ;
         }
 
         function Test(){
-            $this->Connect('tcp://127.0.0.1:16379') ;
-            $this->Cmd(['hello','3']) ;
+            $this->Connect('tcp://127.0.0.1:6379') ;
+
+            if(0){
+                $this->Cmd(['HELP','CLIENT']) ;
+            }else{
+//              $this->Cmd(['HELLO','3']) ;
+//              $this->Cmd(['CLIENT','SETINFO','LIB-NAME','go-redis(,go1.21.0)']) ;
+                if(0){
+                    $this->Cmd(['SET','HOHO','123']) ;
+                }else{
+                    $this->Cmd(['GET','HOHO']) ;
+                }
+            }
         }
     }
 

@@ -12,6 +12,9 @@ func Strtolower(src interface{}) (string){
 func LC(src string) (string){ return strings.ToLower(src[0:1]) + src[1:] ; }
 func UC(src string) (string){ return strings.ToUpper(src[0:1]) + src[1:] ; }
 
+func ToLower(s string) (string){ return strings.ToLower(s) ; }
+func ToUpper(s string) (string){ return strings.ToUpper(s) ; }
+
 func Strval(org interface{}) string{
 
     t := GetType(org) ;
