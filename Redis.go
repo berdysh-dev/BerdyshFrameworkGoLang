@@ -470,7 +470,7 @@ func (server *RedisServer) NewServerConn(con any) (*ServerConn){
     return &ret ;
 }
 
-func NewRedisServer(addr string)(error){
+func NewRedisServer(addr string)(*RedisServer,error){
 
     server := &RedisServer{} ;
 
@@ -600,7 +600,7 @@ func NewRedisServer(addr string)(error){
 
     server.wait.Wait() ;
 
-    return nil ;
+    return server,nil ;
 }
 
 type RedisClient struct {
@@ -749,6 +749,21 @@ func NewRedisClient(opts ... any) (*RedisClient){
 func TestRedis(addr string,opts ... any){
 }
 
+type RedisEvalEntry struct {
+}
+
+func NewRedisEvalEntry(opts ... any) (RedisEvalEntry){
+    ret := RedisEvalEntry{} ;
+    return ret ;
+}
+
+func (serv *RedisServer) DoProc(opts ... any) (*RedisServer) {
+    return serv ;
+}
+
+func (serv *RedisServer) Handle(opts ... any) (*RedisServer){
+    return serv ;
+}
 
 
 
