@@ -34,7 +34,7 @@ func main(){
     //
     // https://redis.io/commands/
 
-    c := X.NewRedisClient(X.RedisClient{Addr: "tcp://localhost:6379"}) ;
+    c := X.NewRedisClient(X.RedisClient{Addr: "tcp://127.0.0.1:6379"}) ;
 
     if err := c.LastErr() ; (err != nil){
         X.Printf("err[%s].\n",err) ;

@@ -2,6 +2,8 @@ package BerdyshFrameworkGoLang
 
 import(
     "sync"
+    "os"
+    "io"
     "net"
     "net/url"
     "math/big"
@@ -63,6 +65,24 @@ func EncodeRESP3_int(i int) (string){
     return sprintf(":%d\r\n",i) ;
 }
 
+func EncodeRESP3_bool_old(b bool) (string){
+    var s string ;
+    if(b == true){
+        s = "1" ;
+    }else{
+        s = "0" ;
+    }
+    return EncodeRESP3_string(s) ;
+}
+
+func EncodeRESP3_bool_new(b bool) (string){
+    if(b == true){
+        return "#t\r\n" ;
+    }else{
+        return "#f\r\n" ;
+    }
+}
+
 func EncodeRESP3(src any) (string){
     ret := "" ;
     t := sprintf("%T",src) ;
@@ -82,6 +102,13 @@ func EncodeRESP3(src any) (string){
                 ret += EncodeRESP3(v) ;
             }
         }
+        case "bool":{
+            if(true){
+                ret += EncodeRESP3_bool_old(src.(bool)) ;
+            }else{
+                ret += EncodeRESP3_bool_new(src.(bool)) ;
+            }
+        }
         case "nil":{
             ret += "$-1\r\n" ;
         }
@@ -92,7 +119,7 @@ func EncodeRESP3(src any) (string){
             ret += EncodeRESP3_string(src.(string)) ;
         }
         default:{
-            printf("Unknown[%s]\n",t) ;
+            printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!-Unknown[%s]\n",t) ;
         }
     }
     return ret ;
@@ -320,12 +347,14 @@ func DecodeProtocol(fifo string) (string,any,error){
     packet := RedisPacket{} ; _ = packet ;
     bin := []byte(fifo) ; _ = bin ;
 
-    printf("%s\n\n",Hexdump(fifo)) ;
-    printf("!!%s\n\n",fifo) ;
+    if(false){
+        printf("Recv:\n%s\n",fifo) ;
+        printf("%s\n\n",Hexdump(fifo)) ;
+    }
 
     idx,x,err := DecodeRESP3(bin,0) ; _ = idx ; _ = err ;
 
-    printf("LEN[%d/%d]\n",idx,len(bin)) ;
+    // printf("LEN[%d/%d]\n",idx,len(bin)) ;
 
     if(idx != len(bin)){
         printf("%s\n\n",Hexdump(fifo)) ;
@@ -396,7 +425,7 @@ func (conn *ServerConn) DoCmd(x any){
     }
 }
 
-func (conn *ServerConn) DoTcp(){
+func (conn *ServerConn) EvAccept(){
     var err error ; _ = err ;
     var packet any ;
     var szRc int ; _ = szRc ;
@@ -449,10 +478,82 @@ func NewRedisServer(addr string)(error){
     server.wait.Add(1) ;
 
     go func(server *RedisServer){
+
+        var x any ; _ = x ;
+
         if ui , err := url.Parse(server.Addr) ; (err != nil){
             Printf("err[%s]/addr[%s]\n",err,addr) ;
         }else{
             switch(ui.Scheme){
+                case "unix":{
+                    netDial := "unix" ; _ = netDial ;
+                    addrDial := ui.Path ; _ = addrDial ;
+                    if _ , err := os.Stat(addrDial) ; (err == nil){
+                        if(addrDial == "/run/redis.sock"){
+                            os.Remove(addrDial) ;
+                        }
+                    }
+                    if unixAddr, err := net.ResolveUnixAddr("unix",addrDial) ; (err != nil){
+                        Printf("err[%s]/path[%s]\n",err,addrDial) ;
+                    }else{
+                        if sockListen, err := net.ListenUnix("unix",unixAddr) ; (err != nil){
+                            Printf("ListenUnix-err[%s]/path[%s]\n",err,addrDial) ;
+                        }else{
+                            Printf("UNIX-Listen-OK[]/addr[%s]\n",addrDial) ;
+                            server.wait.Done() ;
+                            for{
+                                if unixConn, err := sockListen.Accept() ; (err == nil){
+                                    go func() (error){
+                                        buf := make([]byte,0x1000) ;
+                                        var szRc int ;
+                                        fifo := "" ;
+                                        for {
+                                            if szRc,err = unixConn.Read(buf) ; (err == nil){
+                                                fifo += string(buf[:szRc]) ;
+                                                // printf("\n%s\n",Hexdump(fifo)) ;
+
+                                                fifo,x,err = DecodeProtocol(fifo) ; _ = err ; _ = x ;
+
+                                                Res := "" ;
+
+                                                if(sprintf("%T",x) == "[]interface {}"){
+                                                    Q := x.([]interface {}) ;
+
+                                                    for idx,v := range Q{
+                                                        printf("[%02d][%V]\n",idx,v) ;
+                                                    }
+
+                                                    switch(Q[0].(string)){
+                                                        case "EVAL":{
+                                                            script := Q[1].(string) ; _ = script ;
+                                                            numkeys := Q[2].(string) ; _ = numkeys ;
+
+                                                            Res = script ;
+                                                        }
+                                                    }
+
+                                                }
+
+                                                packet := sprintf("$%d\r\n%s\r\n",len(Res),Res) ;
+                                                unixConn.Write([]byte(packet)) ;
+
+                                            }else{
+                                                unixConn.Close() ;
+                                                if(err == io.EOF){
+                                                    // printf("unix-recv[%s]\n",err) ;
+                                                }else{
+                                                    printf("unix-recv[%s]\n",err) ;
+                                                }
+                                                break ;
+                                            }
+                                        }
+                                        return nil ;
+                                    }() ;
+                                }
+                            }
+                        }
+                    }
+                }
                 case "tcp":{
                     if tcpAddr, err := net.ResolveTCPAddr("tcp", ui.Host) ; (err != nil) {
                         Printf("err[%s]/addr[%s]\n",err,ui.Host) ;
@@ -478,7 +579,7 @@ func NewRedisServer(addr string)(error){
                                 select {
                                     case tcpConn := <-chanTcpConn:{
                                         conn := server.NewServerConn(tcpConn) ;
-                                        go conn.DoTcp() ;
+                                        go conn.EvAccept() ;
                                     }
                                     case err := <-chanTcpErr:{
                                         printf("Accept.err[%s]\n",err) ;
@@ -488,6 +589,8 @@ func NewRedisServer(addr string)(error){
                             }
                         }
                     }
+                }
+                default:{
                 }
             }
         }
@@ -504,10 +607,13 @@ type RedisClient struct {
     lastErr     error ;
     Addr        string ;
     Network     string ;
+    Host        string ;
+    Path        string ;
 
     conn        net.Conn ;
 
     protoversion    int ;
+    serverversion   string ;
 }
 
 func (cli *RedisClient) Call(opts ... any) (any,error){
@@ -519,7 +625,11 @@ func (cli *RedisClient) Call(opts ... any) (any,error){
 
     packet := EncodeRESP3(opts) ;
 
-    if len,err := cli.conn.Write(getBytes(packet)) ; (err != nil){
+    printf("%s\n\n",Hexdump(packet)) ;
+
+    if(cli.conn == nil){
+        return nil,Errorf("Not connect [%s]",cli.Addr) ;
+    }else if len,err := cli.conn.Write(getBytes(packet)) ; (err != nil){
         return nil,err ;
     }else{
         _ = len ;
@@ -571,44 +681,64 @@ func NewRedisClient(opts ... any) (*RedisClient){
 
     if(cli.Addr == ""){ cli.Addr = "tcp://:6379" ; }
 
-    if ui , err := url.Parse(cli.Addr) ; (err != nil){
-        cli.lastErr = err ;
-    }else{
+    if ui , err := url.Parse(cli.Addr) ; (err == nil){
         switch(ui.Scheme){
             case "tcp":{
-                if conn,err := net.Dial("tcp", ui.Host) ; (err != nil){
-                    cli.lastErr = err ;
-                }else{
-                    cli.Network = ui.Scheme ;
-                    cli.conn = conn ;
-                }
+                cli.Network = ui.Scheme ;
+                cli.Host = ui.Host ;
+            }
+            case "unix":{
+                cli.Network = ui.Scheme ;
+                cli.Path = ui.Path ;
             }
         }
-        if(cli.conn != nil){
-            if res,err := cli.Call("hello","3") ; (err != nil){
+    }
+
+    if(cli.Network == ""){
+        cli.Network = "tcp" ;
+        cli.Host = cli.Addr ;
+    }
+
+    switch(cli.Network){
+        case "tcp":{
+            if conn,err := net.Dial(cli.Network,cli.Host) ; (err != nil){
                 cli.lastErr = err ;
             }else{
-                if(sprintf("%T",res) == "map[string]interface {}"){
-                    m := res.(map[string]interface {}) ;
-                    for k,v := range m{
-                        switch(k){
-                            case "proto":{
-                                cli.protoversion = v.(int) ;
-                            }
-                            default:{
-                                // printf("[%s][%V]\n",k,v) ;
-                            }
+                cli.conn = conn ;
+            }
+        }
+        case "unix":{
+            if conn,err := net.Dial(cli.Network,cli.Path) ; (err != nil){
+                cli.lastErr = err ;
+            }else{
+                cli.conn = conn ;
+            }
+        }
+    }
+
+    if(cli.conn != nil){
+        if res,err := cli.Call("hello","3") ; (err != nil){
+            cli.lastErr = err ;
+        }else{
+            if(sprintf("%T",res) == "map[string]interface {}"){
+                m := res.(map[string]interface {}) ;
+                for k,v := range m{
+                    switch(k){
+                        case "proto":{ cli.protoversion = v.(int) ; }
+                        case "version":{ cli.serverversion = v.(string) ; }
+                        default:{
+                            // printf("[%s][%V]\n",k,v) ;
                         }
                     }
                 }
             }
-            if(cli.protoversion == 3){
-                if res,err := cli.Call("CLIENT","SETINFO","LIB-NAME","go-redis(,go1.21.0)") ; (err != nil){
-                    cli.lastErr = err ;
-                    // printf("err[%s]\n",err) ;
-                }else{
-                    _ = res ;
-                }
+        }
+        if(false && (cli.protoversion == 3)){
+            if res,err := cli.Call("CLIENT","SETINFO","LIB-NAME","go-redis(,go1.21.0)") ; (err != nil){
+                cli.lastErr = err ;
+                // printf("err[%s]\n",err) ;
+            }else{
+                _ = res ;
             }
         }
     }
@@ -617,52 +747,6 @@ func NewRedisClient(opts ... any) (*RedisClient){
 }
 
 func TestRedis(addr string,opts ... any){
-
-    server := &RedisServer{} ; _ = server ;
-
-    packet := "*2\r\n$5\r\nhello\r\n$1\r\n3\r\n" ;
-    // printf("%s\n",Hexdump(packet)) ;
-
-    if(true){
-//        x := BuildHelloReqponse() ;
-        x := BuildClientSetinfoRequest() ;
-
-        printf("%s\n\n",x) ;
-        printf("%s\n",Hexdump(x)) ;
-
-    }else if ui , err := url.Parse(addr) ; (err != nil){
-        printf("err[%s]/addr[%s]\n",err,addr) ;
-    }else{
-        switch(ui.Scheme){
-            case "tcp":{
-                if conn,err := net.Dial("tcp", ui.Host) ; (err != nil){
-                    printf("err[%s]/addr[%s]\n",err,addr) ;
-                }else{
-                    defer conn.Close()
-                    if len,err := conn.Write(getBytes(packet)) ; (err != nil){
-                        printf("err[%s]/addr[%s]\n",err,addr) ;
-                    }else{
-                        printf("Send(%d)\n",len) ;
-                        buf := make([]byte,0x1000) ;
-                        if szRc,err := conn.Read(buf) ; (err != nil){
-                            printf("err[%s]/addr[%s]\n",err,addr) ;
-                        }else{
-                            // printf("Recv(%d)\n",szRc) ;
-                            // printf("%s\n",Hexdump(string(buf[:szRc]))) ;
-
-                            _,x,_ := DecodeProtocol(string(buf[:szRc])) ;
-
-                            if(sprintf("%T",x) == "map[string]interface {}"){
-                                for k,v := range x.(map[string]interface {}){
-                                    printf("[%s][%T][%V]\n",k,v,v) ;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 

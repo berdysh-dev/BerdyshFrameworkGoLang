@@ -2596,15 +2596,13 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(idx int,addrListen string) (error
                     printf("UNIX-Listen.\n") ;
                     this.Wait.Done() ;
                     for{
-                        unixConn, err := sockListen.Accept() ;
-                        if(err == nil){
+                        if unixConn, err := sockListen.Accept() ; (err == nil){
                             go func() (error){
                                 buf := make([]byte,0x1000) ;
                                 var szRc int ;
                                 var fifo string ;
                                 for {
-                                    szRc,err = unixConn.Read(buf) ;
-                                    if(err == nil){
+                                    if szRc,err = unixConn.Read(buf) ; (err == nil){
 
                                         // printf("\nUnix[0x%x]\n%s\n",szRc,Hexdump(string(buf[:szRc]))) ;
 
