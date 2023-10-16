@@ -3,10 +3,12 @@ package BerdyshFrameworkGoLang
 import (
     "bytes"
     "net/http"
+    "net/url"
     "io"
     "context"
 _   "strconv"
     "strings"
+    "sync"
 )
 
 type TypeContentTypeParser struct {
@@ -440,9 +442,107 @@ func NewClient(opts ... interface{}) (*TypeClient){
     return ret.Init() ;
 }
 
+type HttpServerOption struct {
+    Addr    string ;
+}
 
+type EzRouter struct {
+    server  *HttpServer ;
+} ;
 
+type HttpServer struct {
+    wait    sync.WaitGroup ;
+    Addr    string ;
+    Router  EzRouter ;
+}
 
+func (this *EzRouter) ServeHTTP(wr http.ResponseWriter,req *http.Request){
+    printf("Method[%s]\n",req.Method) ;
+    printf("Host[%s]\n",req.Host) ;
+    printf("RequestURI[%s]\n",req.RequestURI) ;
+    printf("RemoteAddr[%s]\n",req.RemoteAddr) ;
+    printf("Path[%s]\n",req.URL.Path) ;
+    printf("RawPath[%s]\n",req.URL.RawPath) ;
+    printf("RawQuery[%s]\n",req.URL.RawQuery) ;
+
+    // map[string][]string
+
+    for k,vs := range req.Header{
+        for idx,v := range vs{
+            printf("%03d:[%s][%s]\n",idx,k,v) ;
+        }
+    }
+
+}
+
+func NewHttpServer(opts ... any) (*HttpServer,error){
+    server := HttpServer{} ;
+
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
+        switch(t){
+            case "*BerdyshFrameworkGoLang.HttpServerOption":{
+                x := opt.(*HttpServerOption) ;
+                server.Addr = x.Addr ;
+            }
+            case "BerdyshFrameworkGoLang.HttpServerOption":{
+                x := opt.(HttpServerOption) ;
+                server.Addr = x.Addr ;
+            }
+            default:{
+                printf("Unknown[%s]\n",t) ;
+            }
+        }
+    }
+
+    return &server,nil ;
+}
+
+func (server *HttpServer) SSS(path string,opt any) (*HttpServer){
+    t := sprintf("%T",opt) ;
+    printf("!!![%s]--あれ？\n",t) ;
+    printf("!!![%V]--あれ？\n",opt) ;
+
+    var i RedisEvalEntryInterface ; _ = i ;
+
+    i = opt.(RedisEvalEntryInterface) ;
+    i.Init() ;
+
+    return server ;
+}
+
+func (server *HttpServer) HandleFunc(opts ... any) (*HttpServer){
+
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
+        printf("!!![%s]--あれ？\n",t) ;
+        printf("!!![%V]--あれ？\n",opt) ;
+    }
+
+    return server ;
+}
+
+func (this *HttpServer) DoProc(){
+    this.wait.Add(1) ;
+
+    go func(server *HttpServer){
+
+        addr := ":8080" ;
+
+        if ui , err := url.Parse(server.Addr) ; (err != nil){
+            printf("err[%s].\n",err) ;
+        }else{
+            addr = ui.Host ;
+        }
+
+        this.wait.Done() ;
+
+        server.Router.server = server ;
+        http.ListenAndServe(addr,&(server.Router)) ;
+    }(this) ;
+
+    this.wait.Wait() ;
+}
 
 
 

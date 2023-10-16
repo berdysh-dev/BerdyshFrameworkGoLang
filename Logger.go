@@ -2529,7 +2529,7 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(idx int,addrListen string) (error
             if udpAddr, err := net.ResolveUDPAddr(netDial,addrDial) ; (err == nil){
                 if udpConn,err := net.ListenUDP(netDial,udpAddr) ; (err == nil){
                     buf := make([]byte,0x1000) ;
-                    printf("UDP-Listen.\n") ;
+                    printf("UDP-Listen(%s,%s).\n",netDial,addrDial) ;
                     this.Wait.Done() ;
                     for {
                         szRc,addr,err := udpConn.ReadFromUDPAddrPort(buf) ; _ = szRc ; _ = addr ; _ = err ;
@@ -2551,7 +2551,7 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(idx int,addrListen string) (error
             if tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ; (err == nil){
                 if tcpListener,err := net.ListenTCP(netDial,tcpAddr) ; (err == nil){
                     defer tcpListener.Close() ;
-                    printf("TCP-Listen.\n") ;
+                    printf("TCP-Listen(%s,%s).\n",netDial,addrDial) ;
                     this.Wait.Done() ;
                     for{
                         chanTcpConn := make(chan *net.TCPConn) ;
@@ -2593,7 +2593,7 @@ func (this *TypeSyslogDaemon) SyslogDaemonNode(idx int,addrListen string) (error
             if unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ; (err == nil){
                 sockListen, err := net.ListenUnix("unix",unixAddr) ; _ = sockListen ;
                 if(err == nil){
-                    printf("UNIX-Listen.\n") ;
+                    printf("UNIX-Listen(%s,%s).\n",netDial,addrDial) ;
                     this.Wait.Done() ;
                     for{
                         if unixConn, err := sockListen.Accept() ; (err == nil){

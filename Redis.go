@@ -50,7 +50,8 @@ func BuildClientSetinfoRequest() (string){
 }
 
 type RedisServer struct {
-    Addr    string ;
+    Entrys  []RedisEvalEntry ;
+    Addr    any ;
     wait    sync.WaitGroup ;
 }
 
@@ -470,135 +471,29 @@ func (server *RedisServer) NewServerConn(con any) (*ServerConn){
     return &ret ;
 }
 
-func NewRedisServer(addr string)(*RedisServer,error){
+type RedisServerOption struct {
+    Addr    any ;
+}
 
+func NewRedisServer(opts ... any)(*RedisServer,error){
     server := &RedisServer{} ;
 
-    server.Addr = addr ;
-    server.wait.Add(1) ;
+    server.Entrys = make([]RedisEvalEntry,0) ;
 
-    go func(server *RedisServer){
-
-        var x any ; _ = x ;
-
-        if ui , err := url.Parse(server.Addr) ; (err != nil){
-            Printf("err[%s]/addr[%s]\n",err,addr) ;
-        }else{
-            switch(ui.Scheme){
-                case "unix":{
-                    netDial := "unix" ; _ = netDial ;
-                    addrDial := ui.Path ; _ = addrDial ;
-                    if _ , err := os.Stat(addrDial) ; (err == nil){
-                        if(addrDial == "/run/redis.sock"){
-                            os.Remove(addrDial) ;
-                        }
-                    }
-                    if unixAddr, err := net.ResolveUnixAddr("unix",addrDial) ; (err != nil){
-                        Printf("err[%s]/path[%s]\n",err,addrDial) ;
-                    }else{
-                        if sockListen, err := net.ListenUnix("unix",unixAddr) ; (err != nil){
-                            Printf("ListenUnix-err[%s]/path[%s]\n",err,addrDial) ;
-                        }else{
-                            Printf("UNIX-Listen-OK[]/addr[%s]\n",addrDial) ;
-                            server.wait.Done() ;
-                            for{
-                                if unixConn, err := sockListen.Accept() ; (err == nil){
-                                    go func() (error){
-                                        buf := make([]byte,0x1000) ;
-                                        var szRc int ;
-                                        fifo := "" ;
-                                        for {
-                                            if szRc,err = unixConn.Read(buf) ; (err == nil){
-                                                fifo += string(buf[:szRc]) ;
-                                                // printf("\n%s\n",Hexdump(fifo)) ;
-
-                                                fifo,x,err = DecodeProtocol(fifo) ; _ = err ; _ = x ;
-
-                                                Res := "" ;
-
-                                                if(sprintf("%T",x) == "[]interface {}"){
-                                                    Q := x.([]interface {}) ;
-
-                                                    for idx,v := range Q{
-                                                        printf("[%02d][%V]\n",idx,v) ;
-                                                    }
-
-                                                    switch(Q[0].(string)){
-                                                        case "EVAL":{
-                                                            script := Q[1].(string) ; _ = script ;
-                                                            numkeys := Q[2].(string) ; _ = numkeys ;
-
-                                                            Res = script ;
-                                                        }
-                                                    }
-
-                                                }
-
-                                                packet := sprintf("$%d\r\n%s\r\n",len(Res),Res) ;
-                                                unixConn.Write([]byte(packet)) ;
-
-                                            }else{
-                                                unixConn.Close() ;
-                                                if(err == io.EOF){
-                                                    // printf("unix-recv[%s]\n",err) ;
-                                                }else{
-                                                    printf("unix-recv[%s]\n",err) ;
-                                                }
-                                                break ;
-                                            }
-                                        }
-                                        return nil ;
-                                    }() ;
-                                }
-                            }
-                        }
-                    }
-                }
-                case "tcp":{
-                    if tcpAddr, err := net.ResolveTCPAddr("tcp", ui.Host) ; (err != nil) {
-                        Printf("err[%s]/addr[%s]\n",err,ui.Host) ;
-                    }else{
-                        if tcpListener, err := net.ListenTCP("tcp", tcpAddr) ; (err != nil) {
-                            Printf("err[%s]/addr[%s]\n",err,ui.Host) ;
-                        }else{
-                            Printf("TCP-Listen-OK[]/addr[%s]\n",ui.Host) ;
-                            server.wait.Done() ;
-                            for{
-                                chanTcpConn := make(chan *net.TCPConn) ;
-                                chanTcpErr := make(chan error) ;
-
-                                go func() {
-                                    tcpConn, err := tcpListener.AcceptTCP() ;
-                                    if (err != nil) {
-                                        chanTcpErr <- err ;
-                                        return
-                                    }
-                                    chanTcpConn <- tcpConn
-                                }() ;
-
-                                select {
-                                    case tcpConn := <-chanTcpConn:{
-                                        conn := server.NewServerConn(tcpConn) ;
-                                        go conn.EvAccept() ;
-                                    }
-                                    case err := <-chanTcpErr:{
-                                        printf("Accept.err[%s]\n",err) ;
-                                    }
-                                }
-
-                            }
-                        }
-                    }
-                }
-                default:{
-                }
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
+        switch(t){
+            case "*BerdyshFrameworkGoLang.RedisServerOption":{
+                x := opt.(*RedisServerOption) ;
+                server.Addr = x.Addr ;
+            }
+            default:{
+                printf("!!![%s]\n",t) ;
             }
         }
+    }
 
-        server.wait.Done() ;
-    }(server) ;
-
-    server.wait.Wait() ;
+    // server.Addr = addr ;
 
     return server,nil ;
 }
@@ -749,7 +644,14 @@ func NewRedisClient(opts ... any) (*RedisClient){
 func TestRedis(addr string,opts ... any){
 }
 
+type RedisEvalEntryInterface interface {
+    Init() ;
+    Do(f string,src string) (string) ;
+}
+
 type RedisEvalEntry struct {
+    Function    any ;
+    H           RedisEvalEntryInterface ;
 }
 
 func NewRedisEvalEntry(opts ... any) (RedisEvalEntry){
@@ -757,12 +659,210 @@ func NewRedisEvalEntry(opts ... any) (RedisEvalEntry){
     return ret ;
 }
 
-func (serv *RedisServer) DoProc(opts ... any) (*RedisServer) {
-    return serv ;
+func (this *RedisEvalEntry) SetFunction(opts ... any) (*RedisEvalEntry) {
+
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
+        switch(t){
+            case "string":{
+                if(this.Function == nil){
+                    this.Function = opt.(string) ;
+                }else{
+                    t2 := sprintf("%T",this.Function) ;
+                    switch(t2){
+                        case "string":{
+                            x := make([]string,0) ;
+                            x = append(x,this.Function.(string)) ;
+                            x = append(x,opt.(string)) ;
+                            this.Function = x ;
+                        }
+                        case "[]string":{
+                            this.Function = append(this.Function.([]string),opt.(string)) ;
+                        }
+                        default:{
+                            printf("!!!-t2[%s]\n",t2) ;
+                        }
+                    }
+                }
+            }
+            default:{
+                printf("!!!-t[%s]\n",t) ;
+            }
+        }
+    }
+
+    return this ;
 }
 
-func (serv *RedisServer) Handle(opts ... any) (*RedisServer){
-    return serv ;
+func (server *RedisServer) DoProcUnix(ui *url.URL){
+    netDial := ui.Scheme ; _ = netDial ;
+    addrDial := ui.Path ; _ = addrDial ;
+
+    var x any ; _ = x ;
+
+    if _ , err := os.Stat(addrDial) ; (err == nil){
+        if(addrDial == "/run/redis.sock"){
+            os.Remove(addrDial) ;
+        }
+    }
+
+    if unixAddr, err := net.ResolveUnixAddr(netDial,addrDial) ; (err != nil){
+        Printf("err[%s]/path[%s]\n",err,addrDial) ;
+    }else{
+        if sockListen, err := net.ListenUnix(netDial,unixAddr) ; (err != nil){
+            Printf("ListenUnix-err[%s]/path[%s]\n",err,addrDial) ;
+        }else{
+            Printf("UNIX-Listen-OK[]/addr[%s]\n",addrDial) ;
+            server.wait.Done() ;
+            for{
+                if unixConn, err := sockListen.Accept() ; (err != nil){
+                    Printf("err[%s]/addr[%s]\n",err,addrDial) ;
+                }else{
+                    go func(){
+                        buf := make([]byte,0x1000) ;
+                        var szRc int ;
+                        fifo := "" ;
+                        for {
+                            if szRc,err = unixConn.Read(buf) ; (err == nil){
+
+                                fifo += string(buf[:szRc]) ;
+                                // printf("\n%s\n",Hexdump(fifo)) ;
+
+                                fifo,x,err = DecodeProtocol(fifo) ; _ = err ; _ = x ;
+
+                                Res := "" ;
+
+                                if(sprintf("%T",x) == "[]interface {}"){
+                                    Q := x.([]interface {}) ;
+
+                                    for idx,v := range Q{
+                                        printf("[%02d][%V]\n",idx,v) ;
+                                    }
+
+                                    switch(Q[0].(string)){
+                                        case "EVAL":{
+                                            script := Q[1].(string) ; _ = script ;
+                                            numkeys := Q[2].(string) ; _ = numkeys ;
+                                            arg := Q[3].(string) ; _ = arg ;
+
+                                            for _,e := range server.Entrys{
+                                                switch(sprintf("%T",e.Function)){
+                                                    case "[]string":{
+                                                        for _,f := range e.Function.([]string){
+                                                            if(f == script){
+                                                                Res = e.H.Do(script,arg) ;
+                                                                goto brk ;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                        }
+                                    }
+                                }
+brk:
+                                packet := sprintf("$%d\r\n%s\r\n",len(Res),Res) ;
+                                unixConn.Write([]byte(packet)) ;
+
+                            }else{
+                                unixConn.Close() ;
+                                if(err == io.EOF){
+                                    // printf("unix-recv[%s]\n",err) ;
+                                }else{
+                                    printf("unix-recv[%s]\n",err) ;
+                                }
+                                break ;
+                            }
+                        }
+                    }() ;
+                }
+            }
+        }
+    }
+}
+
+func (server *RedisServer) DoProcTcp(ui *url.URL){
+
+    netDial := ui.Scheme ; _ = netDial ;
+    addrDial := ui.Host ; _ = addrDial ;
+
+    if tcpAddr, err := net.ResolveTCPAddr(netDial,addrDial) ; (err != nil) {
+        Printf("err[%s]/addr[%s]\n",err,addrDial) ;
+    }else{
+        if tcpListener, err := net.ListenTCP(netDial,tcpAddr) ; (err != nil) {
+            Printf("err[%s]/addr[%s]\n",err,addrDial) ;
+        }else{
+            Printf("TCP-Listen-OK[]/addr[%s]\n",addrDial) ;
+            server.wait.Done() ;
+            for{
+                chanTcpConn := make(chan *net.TCPConn) ;
+                chanTcpErr := make(chan error) ;
+                go func(){
+                    tcpConn, err := tcpListener.AcceptTCP() ;
+                    if (err != nil) {
+                        chanTcpErr <- err ;
+                        return ;
+                    }
+                    chanTcpConn <- tcpConn ;
+                }() ;
+                select {
+                    case tcpConn := <-chanTcpConn:{
+                        conn := server.NewServerConn(tcpConn) ;
+                        go conn.EvAccept() ;
+                    }
+                    case err := <-chanTcpErr:{
+                        printf("Accept.err[%s]\n",err) ;
+                    }
+                }
+            }
+        }
+    }
+}
+
+func (server *RedisServer) DoProc(opts ... any) (*RedisServer) {
+
+    addrs := make([]string,0) ;
+
+    t := sprintf("%T",server.Addr) ;
+    switch(t){
+        case "string":{
+            addrs = append(addrs,server.Addr.(string)) ;
+        }
+    }
+
+    for _,addr := range addrs{
+        if ui , err := url.Parse(addr) ; (err != nil){
+            Printf("err[%s]/addr[%s]\n",err,addr) ;
+        }else{
+            switch(ui.Scheme){
+                case "unix":{
+                    server.wait.Add(1) ;
+                    go func(){
+                        server.DoProcUnix(ui) ;
+                    }() ;
+                }
+                case "tcp":{
+                    server.wait.Add(1) ;
+                    go func(){
+                        server.DoProcTcp(ui) ;
+                    }() ;
+                }
+            }
+        }
+    }
+
+    printf("Wait-Start.\n") ;
+    server.wait.Wait() ;
+    printf("Wait-OK.\n") ;
+    return server ;
+}
+
+func (server *RedisServer) Handle(entry RedisEvalEntry,h RedisEvalEntryInterface) (*RedisServer){
+    h.Init() ;
+    entry.H = h ;
+    server.Entrys = append(server.Entrys,entry) ;
+    return server ;
 }
 
 
