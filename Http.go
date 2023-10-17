@@ -504,21 +504,30 @@ type ResHttp struct {
 
 type multipartReader struct {
     PostRaw string ;
+    Reader  io.Reader ;
 }
 
 func (this *multipartReader) Read(p []byte) (n int, err error){
     max := len(p) ;
 
-    b := []byte(this.PostRaw) ;
-
-    L := len(b) ;
-
-    if(max >= L){
-        for idx,x := range b {
-            p[idx] = x ;
-        }
-        return L,nil ;
+    if(this.Reader != nil){
+        return this.Reader.Read(p) ;
     }
+
+    if(this.PostRaw != ""){
+
+        b := []byte(this.PostRaw) ;
+
+        L := len(b) ;
+
+        if(max >= L){
+            for idx,x := range b {
+                p[idx] = x ;
+            }
+            return L,nil ;
+        }
+    }
+
     return 0,Errorf("MEM") ;
 }
 
@@ -599,6 +608,18 @@ func NewReqHttp(req *http.Request) (ReqHttp){
                     }
                 }
             }
+            case "multipart/form-data":{
+                mpr := multipart.NewReader(&multipartReader{Reader: req.Body},Q.Boundary) ;
+                if multipartForm,err := mpr.ReadForm(Q.ContentLength) ; (err != nil){
+                    printf("err[%s]\n",err) ;
+                }else{
+                    for k,vs := range multipartForm.Value{
+                        for idx,v := range vs {
+                            printf("%d[%s][%T][%s]\n",idx,k,v,v) ;
+                        }
+                    }
+                }
+            }
             default:{
                 buf := make([]byte, Q.ContentLength) ;
 
@@ -614,18 +635,6 @@ func NewReqHttp(req *http.Request) (ReqHttp){
                     Q.PostRaw = (string)(buf[:rcSz]) ;
                 }
                 switch(Q.ContentType){
-                    case "multipart/form-data":{
-                        mpr := multipart.NewReader(&multipartReader{PostRaw: Q.PostRaw}, Q.Boundary) ;
-                        if multipartForm,err := mpr.ReadForm(Q.ContentLength) ; (err != nil){
-                            printf("err[%s]\n",err) ;
-                        }else{
-                            for k,vs := range multipartForm.Value{
-                                for iii,v := range vs {
-                                    printf("[%s][%d][%s]\n",k,iii,v) ;
-                                }
-                            }
-                        }
-                    }
                     default:{
                     }
                 }
