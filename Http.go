@@ -5,6 +5,7 @@ import (
     "net/http"
     "net/url"
     "io"
+    "fmt"
     "context"
 _   "strconv"
     "strings"
@@ -446,8 +447,133 @@ type HttpServerOption struct {
     Addr    string ;
 }
 
+type Cookie struct {
+    Name    string ;
+    Value   string ;
+}
+
+type ReqHttp struct {
+    Method      string ;
+    Path        string ;
+    QueryString string ;
+    RemoteAddr  string ;
+    Host        string ;
+
+    ContentLength   int64 ;
+    ContentType     string ;
+    Charset         string ;
+
+    Cookies         map[string]Cookie ;
+    Headers         map[string]string ;
+    HeadersMulti    map[string][]string ;
+}
+
+type ResHttp struct {
+    Status          int ;
+    ContentType     string ;
+    Charset         string ;
+    fifo            string ;
+}
+
+func NewReqHttp(req *http.Request) (ReqHttp){
+    Q := ReqHttp{} ;
+
+    Q.Method        = req.Method ;
+    Q.Path          = req.URL.Path ;
+    Q.QueryString   = req.URL.RawQuery ;
+    Q.RemoteAddr    = req.RemoteAddr ;
+    Q.Host          = req.Host ;
+
+    Q.Headers       = make(map[string]string) ;
+    Q.HeadersMulti  = make(map[string][]string) ;
+
+    for K,vs := range req.Header{
+        k := ToLower(K) ;
+        switch(k){
+            case "content-type":{
+                printf("!!!!!!!!!!!!!!![%s][%s]\n",k,vs[0]) ;
+            }
+            default:{
+                if(len(vs) == 1){
+                    Q.Headers[k] = vs[0] ;
+                }else{
+                    Q.HeadersMulti[k] = vs ;
+                }
+            }
+        }
+    }
+
+    return Q ;
+}
+
+type ResponseWriter interface {
+    Header()                        http.Header ;
+    Write([]byte)                   (int, error) ;
+    WriteHeader(statusCode int) ;
+}
+
+func NewResHttp() (ResHttp){
+    A := ResHttp{} ;
+    A.Status = 200 ;
+    A.ContentType = "text/html" ;
+    A.Charset = "utf8" ;
+
+    return A ;
+}
+
+func (this *ResHttp) Write(p []byte) (n int, err error){
+    this.fifo += string(p) ;
+    return n,nil ;
+}
+
+func (this *ResHttp) Printf(format string,args ... any){
+    str := fmt.Sprintf(format,args ...) ;
+    this.fifo += str ;
+}
+
+func (this *ResHttp) Echo(opts ... any){
+    for _,opt := range opts{
+        t := sprintf("%T",opt) ;
+        switch(t){
+            case "string":{
+                this.fifo += opt.(string) ;
+            }
+            case "[]uint8":{
+                this.fifo += string(opt.([]uint8)) ;
+            }
+            case "[]int32":{
+                this.fifo += string(opt.([]int32)) ;
+            }
+            case "int":{
+                this.fifo += sprintf("%d",opt.(int)) ;
+            }
+            case "int32":{
+                this.fifo += sprintf("%c",opt.(int32)) ;
+            }
+            default:{
+                this.fifo += sprintf("Unknown[%s]",t) ;
+            }
+        }
+    }
+
+}
+
+type EzRouterEntryInterface interface {
+    Init() ;
+    EvReqHttp(A *ResHttp,Q *ReqHttp) ;
+    GetId() (string) ;
+}
+
+type EzHandler struct {
+    Path    string ;
+    Methods []string ;
+    Handle  EzRouterEntryInterface ;
+}
+
 type EzRouter struct {
     server  *HttpServer ;
+
+    Handlers    []EzHandler ;
 } ;
 
 type HttpServer struct {
@@ -456,23 +582,32 @@ type HttpServer struct {
     Router  EzRouter ;
 }
 
-func (this *EzRouter) ServeHTTP(wr http.ResponseWriter,req *http.Request){
-    printf("Method[%s]\n",req.Method) ;
-    printf("Host[%s]\n",req.Host) ;
-    printf("RequestURI[%s]\n",req.RequestURI) ;
-    printf("RemoteAddr[%s]\n",req.RemoteAddr) ;
-    printf("Path[%s]\n",req.URL.Path) ;
-    printf("RawPath[%s]\n",req.URL.RawPath) ;
-    printf("RawQuery[%s]\n",req.URL.RawQuery) ;
+func (this *EzRouter) ServeHTTP(wrReal http.ResponseWriter,req *http.Request){
 
-    // map[string][]string
+    var entry *EzHandler = nil ;
 
-    for k,vs := range req.Header{
-        for idx,v := range vs{
-            printf("%03d:[%s][%s]\n",idx,k,v) ;
+    for _,e := range this.Handlers {
+        for _,m := range e.Methods{
+            if(req.Method == m){
+                entry = &e ;
+            }
         }
     }
 
+    if(entry != nil){
+
+        Q := NewReqHttp(req) ;
+        A := NewResHttp() ;
+
+        entry.Handle.EvReqHttp(&A,&Q) ;
+
+        wrReal.Header().Set("Content-Type", "text/html; charset=utf8") ;
+        wrReal.WriteHeader(http.StatusOK) ;
+
+        if _,err := wrReal.Write([]byte(A.fifo)) ; (err != nil){
+            Printf("err[%s]\n",err) ;
+        }
+    }
 }
 
 func NewHttpServer(opts ... any) (*HttpServer,error){
@@ -498,26 +633,40 @@ func NewHttpServer(opts ... any) (*HttpServer,error){
     return &server,nil ;
 }
 
-func (server *HttpServer) SSS(path string,opt any) (*HttpServer){
-    t := sprintf("%T",opt) ;
-    printf("!!![%s]--あれ？\n",t) ;
-    printf("!!![%V]--あれ？\n",opt) ;
-
-    var i RedisEvalEntryInterface ; _ = i ;
-
-    i = opt.(RedisEvalEntryInterface) ;
-    i.Init() ;
-
+func (server *HttpServer) Method(opts ... any) (*HttpServer){
+    idx := len(server.Router.Handlers) - 1 ;
+    if(idx >= 0){
+        e := &(server.Router.Handlers[idx]) ;
+        for _,opt := range opts{
+            t := sprintf("%T",opt) ;
+            switch(t){
+                case "string":{
+                    m := ToUpper(opt.(string)) ;
+                    switch(m){
+                        case "GET","PUT","POST","DELETE","HEAD":{
+                            e.Methods = append(e.Methods,m) ;
+                        }
+                        default:{
+                            printf("Unknown[%s]\n",m) ;
+                        }
+                    }
+                }
+            }
+        }
+    }
     return server ;
 }
 
-func (server *HttpServer) HandleFunc(opts ... any) (*HttpServer){
+func (server *HttpServer) EzHandle(path string,handle  EzRouterEntryInterface) (*HttpServer){
 
-    for _,opt := range opts{
-        t := sprintf("%T",opt) ;
-        printf("!!![%s]--あれ？\n",t) ;
-        printf("!!![%V]--あれ？\n",opt) ;
-    }
+    handle.Init() ;
+
+    h := EzHandler{} ;
+
+    h.Path  = path ;
+    h.Handle = handle ;
+
+    server.Router.Handlers = append(server.Router.Handlers,h) ;
 
     return server ;
 }
