@@ -7,9 +7,10 @@ import (
     "io"
     "fmt"
     "context"
-_   "strconv"
+    "strconv"
     "strings"
     "sync"
+    "mime/multipart"
 )
 
 type TypeContentTypeParser struct {
@@ -46,7 +47,6 @@ func (this *TypeBody) Read(p []byte) (n int, err error){
 
 func ContentTypeParser(contentTypePostFull string) (TypeContentTypeParser,error){
     this := TypeContentTypeParser{} ;
-
 
     this.contentTypeFull = contentTypePostFull ;
 
@@ -462,10 +462,32 @@ type ReqHttp struct {
     ContentLength   int64 ;
     ContentType     string ;
     Charset         string ;
+    Boundary        string ;
+
+    PostRaw         string ;
 
     Cookies         map[string]Cookie ;
     Headers         map[string]string ;
     HeadersMulti    map[string][]string ;
+}
+
+type EzHeader struct {
+    P   *ResHttp ;
+}
+
+func (this *EzHeader) Set(K string,v string) (*EzHeader){
+
+    k := ToLower(K) ;
+
+    this.P.Headers[k] = v ;
+
+    return this ;
+}
+
+type EzCookie struct {
+}
+
+func (this *EzCookie) Set(opts ... any){
 }
 
 type ResHttp struct {
@@ -473,6 +495,31 @@ type ResHttp struct {
     ContentType     string ;
     Charset         string ;
     fifo            string ;
+    ezHeader        EzHeader ;
+    Headers         map[string]string ;
+    InitHeaders     bool ;
+
+    Cookie          EzCookie ;
+}
+
+type multipartReader struct {
+    PostRaw string ;
+}
+
+func (this *multipartReader) Read(p []byte) (n int, err error){
+    max := len(p) ;
+
+    b := []byte(this.PostRaw) ;
+
+    L := len(b) ;
+
+    if(max >= L){
+        for idx,x := range b {
+            p[idx] = x ;
+        }
+        return L,nil ;
+    }
+    return 0,Errorf("MEM") ;
 }
 
 func NewReqHttp(req *http.Request) (ReqHttp){
@@ -491,7 +538,40 @@ func NewReqHttp(req *http.Request) (ReqHttp){
         k := ToLower(K) ;
         switch(k){
             case "content-type":{
-                printf("!!!!!!!!!!!!!!![%s][%s]\n",k,vs[0]) ;
+                printf("TTTTTTTTTTTTTTTTTT[%s]\n",vs[0]) ;
+                tokens := strings.Split(vs[0], ";") ;
+
+                Q.ContentType   = "" ;
+                Q.Charset       = "" ;
+                Q.Boundary      = "" ;
+
+                for idx,token := range tokens{
+                    token = Trim(token) ;
+                    if(idx == 0){
+                        Q.ContentType = token ;
+                    }else{
+                        xx := strings.Split(token,"=") ;
+                        if(len(xx) == 2){
+                            k := ToLower(Trim(xx[0])) ;
+                            v := Trim(xx[1]) ;
+                            switch(k){
+                                case "boundary":{
+                                    Q.Boundary = v ;
+                                }
+                                case "charset":{
+                                    Q.Charset = v ;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            case "content-length":{
+                if i64,err := strconv.ParseInt(vs[0],10,64) ; (err != nil){
+                    printf("err[%s][%s][%s]\n",k,err,vs[0]) ;
+                }else{
+                    Q.ContentLength = i64 ;
+                }
             }
             default:{
                 if(len(vs) == 1){
@@ -501,6 +581,57 @@ func NewReqHttp(req *http.Request) (ReqHttp){
                 }
             }
         }
+    }
+
+    if(Q.ContentLength > 0){
+        Printf("[%s]/PostData[%s][%d]\n",Q.ContentType,Q.ContentType,Q.ContentLength) ;
+
+        switch(Q.ContentType){
+            case "application/x-www-form-urlencoded":{
+                if err := req.ParseForm() ; (err != nil) {
+                    printf("err[%s]\n",err) ;
+                }else{
+                    printf("OK[%T]\n",req.Form) ;
+                    for k, vs := range req.Form {
+                        for idx,v := range vs {
+                            printf("%d[%s][%T][%s]\n",idx,k,v,v) ;
+                        }
+                    }
+                }
+            }
+            default:{
+                buf := make([]byte, Q.ContentLength) ;
+
+                //  req.Body io.ReadCloser = io.Reader + io.Close 
+
+                if rcSz , err := req.Body.Read(buf) ; (err != nil){
+                    if(err == io.EOF){
+                        Q.PostRaw = (string)(buf[:rcSz]) ;
+                    }else{
+                        printf("err[%s]\n",err) ;
+                    }
+                }else{
+                    Q.PostRaw = (string)(buf[:rcSz]) ;
+                }
+                switch(Q.ContentType){
+                    case "multipart/form-data":{
+                        mpr := multipart.NewReader(&multipartReader{PostRaw: Q.PostRaw}, Q.Boundary) ;
+                        if multipartForm,err := mpr.ReadForm(Q.ContentLength) ; (err != nil){
+                            printf("err[%s]\n",err) ;
+                        }else{
+                            for k,vs := range multipartForm.Value{
+                                for iii,v := range vs {
+                                    printf("[%s][%d][%s]\n",k,iii,v) ;
+                                }
+                            }
+                        }
+                    }
+                    default:{
+                    }
+                }
+            }
+        }
+
     }
 
     return Q ;
@@ -516,7 +647,11 @@ func NewResHttp() (ResHttp){
     A := ResHttp{} ;
     A.Status = 200 ;
     A.ContentType = "text/html" ;
-    A.Charset = "utf8" ;
+    A.Charset = "utf-8" ;
+
+    A.ezHeader.P = &A ;
+    A.Headers   = make(map[string]string) ;
+    A.InitHeaders = true ;
 
     return A ;
 }
@@ -555,7 +690,14 @@ func (this *ResHttp) Echo(opts ... any){
             }
         }
     }
+}
 
+func (this *ResHttp) Header() (*EzHeader){
+    return &(this.ezHeader) ;
+}
+
+func (this *ResHttp) WriteHeader(status int){
+    this.Status = status ;
 }
 
 type EzRouterEntryInterface interface {
@@ -601,8 +743,12 @@ func (this *EzRouter) ServeHTTP(wrReal http.ResponseWriter,req *http.Request){
 
         entry.Handle.EvReqHttp(&A,&Q) ;
 
-        wrReal.Header().Set("Content-Type", "text/html; charset=utf8") ;
-        wrReal.WriteHeader(http.StatusOK) ;
+        for K,v := range A.Headers{
+            k := ToLower(K) ;
+            wrReal.Header().Set(k,v) ;
+        }
+
+        wrReal.WriteHeader(A.Status) ;
 
         if _,err := wrReal.Write([]byte(A.fifo)) ; (err != nil){
             Printf("err[%s]\n",err) ;
