@@ -242,7 +242,8 @@ func (this *TypeAssoc) DecodeJson(src any) (*TypeAssoc){
     }
 
     var m any ;
-    if(text[0:1] == "["){
+
+    if((len(text) > 0) && (text[0:1] == "[")){
         m = make([]map[string]interface{},0) ;
     }else{
         m = make(map[string]interface{}) ;

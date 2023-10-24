@@ -484,6 +484,11 @@ func (this *EzHeader) Set(K string,v string) (*EzHeader){
     return this ;
 }
 
+func (this *ReqHttp) GetJson() (any,error){
+    assoc := NewAssoc().DecodeJson(this.PostRaw) ;
+    return assoc,nil ;
+}
+
 type EzCookie struct {
 }
 
@@ -547,7 +552,6 @@ func NewReqHttp(req *http.Request) (ReqHttp){
         k := ToLower(K) ;
         switch(k){
             case "content-type":{
-                printf("TTTTTTTTTTTTTTTTTT[%s]\n",vs[0]) ;
                 tokens := strings.Split(vs[0], ";") ;
 
                 Q.ContentType   = "" ;
@@ -593,14 +597,13 @@ func NewReqHttp(req *http.Request) (ReqHttp){
     }
 
     if(Q.ContentLength > 0){
-        Printf("[%s]/PostData[%s][%d]\n",Q.ContentType,Q.ContentType,Q.ContentLength) ;
+        Printf("Type[%s][%d]\n",Q.ContentType,Q.ContentLength) ;
 
         switch(Q.ContentType){
             case "application/x-www-form-urlencoded":{
                 if err := req.ParseForm() ; (err != nil) {
                     printf("err[%s]\n",err) ;
                 }else{
-                    printf("OK[%T]\n",req.Form) ;
                     for k, vs := range req.Form {
                         for idx,v := range vs {
                             printf("%d[%s][%T][%s]\n",idx,k,v,v) ;
@@ -715,33 +718,41 @@ type EzRouterEntryInterface interface {
     GetId() (string) ;
 }
 
-type EzHandler struct {
-    Path    string ;
-    Methods []string ;
-    Handle  EzRouterEntryInterface ;
-}
-
 type EzRouter struct {
     server  *HttpServer ;
 
     Handlers    []EzHandler ;
 } ;
 
+type HttpServerEntryInterface interface {
+    GetRouteParams()     (any) ;
+}
+
+type TypeHttpServerEntryEvaluationFunction func(entry HttpServerEntryInterface) int32 ;
+
 type HttpServer struct {
-    wait    sync.WaitGroup ;
-    Addr    string ;
-    Router  EzRouter ;
+    wait                sync.WaitGroup ;
+    Addr                string ;
+    Router              EzRouter ;
+    LastErr             error ;
+    EvaluationFunction  TypeHttpServerEntryEvaluationFunction ;
 }
 
 func (this *EzRouter) ServeHTTP(wrReal http.ResponseWriter,req *http.Request){
 
     var entry *EzHandler = nil ;
 
-    for _,e := range this.Handlers {
-        for _,m := range e.Methods{
-            if(req.Method == m){
-                entry = &e ;
-            }
+    var max uint64 = 0 ;
+
+    L := len(this.Handlers) ;
+
+    for idx,e := range this.Handlers {
+        p1 := (uint64)(this.server.EvaluationFunction(e.Entry)) ;
+        p2 := (uint64)(L - idx) ;
+        point := (p1 * 1024) + p2 ;
+        if(max < point){
+            max = point ;
+            entry = &e ;
         }
     }
 
@@ -801,6 +812,9 @@ func (server *HttpServer) Method(opts ... any) (*HttpServer){
                         case "GET","PUT","POST","DELETE","HEAD":{
                             e.Methods = append(e.Methods,m) ;
                         }
+                        case "*":{
+                            e.Methods = append(e.Methods,m) ;
+                        }
                         default:{
                             printf("Unknown[%s]\n",m) ;
                         }
@@ -812,13 +826,48 @@ func (server *HttpServer) Method(opts ... any) (*HttpServer){
     return server ;
 }
 
-func (server *HttpServer) EzHandle(path string,handle  EzRouterEntryInterface) (*HttpServer){
+type HttpServerEntry struct {
+}
+
+func (*HttpServerEntry) GetRouteParams() (any){ return "C" ; }
+
+func NewHttpServerEntry() (*HttpServerEntry){
+    ret := HttpServerEntry{} ;
+    return &ret ;
+}
+
+func IsMatchType(a any,s string) (error){
+    return nil ;
+}
+
+func (server *HttpServer) SetEvaluationFunction(opts ... any) (*HttpServer){
+
+    var err error ;
+
+    for _,opt := range opts{
+        if err = IsMatchType(opt,"func(HttpServerEntryInterface)(int32)") ; (err == nil){
+            server.EvaluationFunction = opt.(func(HttpServerEntryInterface)(int32)) ;
+        }
+    }
+
+    if(err != nil){ server.LastErr = err ; }
+
+    return server ;
+}
+
+type EzHandler struct {
+    Methods []string ;
+    Entry   HttpServerEntryInterface ;
+    Handle  EzRouterEntryInterface ;
+}
+
+func (server *HttpServer) EzHandle(entry HttpServerEntryInterface,handle  EzRouterEntryInterface) (*HttpServer){
 
     handle.Init() ;
 
     h := EzHandler{} ;
 
-    h.Path  = path ;
+    h.Entry  = entry ;
     h.Handle = handle ;
 
     server.Router.Handlers = append(server.Router.Handlers,h) ;
@@ -826,7 +875,8 @@ func (server *HttpServer) EzHandle(path string,handle  EzRouterEntryInterface) (
     return server ;
 }
 
-func (this *HttpServer) DoProc(){
+
+func (this *HttpServer) DoProc() (error){
     this.wait.Add(1) ;
 
     go func(server *HttpServer){
@@ -846,6 +896,8 @@ func (this *HttpServer) DoProc(){
     }(this) ;
 
     this.wait.Wait() ;
+
+    return nil ;
 }
 
 
